@@ -117,6 +117,20 @@ class MacOSPowerAgent {
     this.setupMqttClient();
   }
 
+  private async getUptimeMinutes(): Promise<number> {
+    try {
+      const output = await this.executeCommand("uptime -s");
+      // uptime -s returns boot time, e.g. '2024-07-31 08:15:23'
+      const bootTime = new Date(output.trim());
+      const now = new Date();
+      const diffMs = now.getTime() - bootTime.getTime();
+      return Math.floor(diffMs / 60000); // minutes
+    } catch (error) {
+      console.error("Error getting uptime:", error);
+      return -1;
+    }
+  }
+
   private setupMqttClient(): void {
     this.client.on("connect", () => {
       console.log("Connected to MQTT broker");
@@ -297,6 +311,16 @@ class MacOSPowerAgent {
       device: deviceConfig,
     };
 
+    // Uptime Sensor
+    const uptimeConfig = {
+      name: "System Uptime",
+      unique_id: `${this.deviceId}_uptime`,
+      state_topic: `${DISCOVERY_PREFIX}/sensor/${this.deviceId}/uptime/state`,
+      unit_of_measurement: "min",
+      value_template: "{{ value_json.uptime }}",
+      device: deviceConfig,
+    };
+
     // Publish discovery configs
     this.client.publish(
       `${DISCOVERY_PREFIX}/sensor/${this.deviceId}/battery_level/config`,
@@ -319,6 +343,12 @@ class MacOSPowerAgent {
       { retain: true }
     );
 
+    this.client.publish(
+      `${DISCOVERY_PREFIX}/sensor/${this.deviceId}/uptime/config`,
+      JSON.stringify(uptimeConfig),
+      { retain: true }
+    );
+
     console.log("Published Home Assistant discovery configurations");
   }
 
@@ -326,6 +356,8 @@ class MacOSPowerAgent {
     try {
       const batteryInfo = await this.getBatteryInfo();
       const powerInfo = await this.getPowerInfo();
+
+      const uptimeMinutes = await this.getUptimeMinutes();
 
       if (batteryInfo) {
         // Battery Level
@@ -357,6 +389,15 @@ class MacOSPowerAgent {
         JSON.stringify({ ac_power: powerInfo.acPower ? "ON" : "OFF" })
       );
 
+      // Uptime
+      this.client.publish(
+        `${DISCOVERY_PREFIX}/sensor/${this.deviceId}/uptime/state`,
+        JSON.stringify({ uptime: uptimeMinutes })
+      );
+
+      console.log(
+        `AC Power: ${powerInfo.acPower}, Uptime: ${uptimeMinutes}min`
+      );
       console.log(`AC Power: ${powerInfo.acPower}`);
     } catch (error) {
       console.error("Error publishing sensor data:", error);
