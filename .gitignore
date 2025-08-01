@@ -1,0 +1,93 @@
+# dependencies (bun install)
+node_modules
+
+# Bun specific
+.bun
+bun.lockb
+*.bun
+
+# Compiled executable
+hass-agent
+hass-agent.exe
+
+# output
+out
+dist
+*.tgz
+
+# code coverage
+coverage
+*.lcov
+
+# logs
+logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+lerna-debug.log*
+.pnpm-debug.log*
+/tmp/hass-agent.log
+/tmp/hass-agent.error.log
+report.[0-9]*.[0-9]*.[0-9]*.[0-9]*.json
+
+# dotenv environment variable files
+.env
+.env.development.local
+.env.test.local
+.env.production.local
+.env.local
+
+# caches
+.eslintcache
+.cache
+*.tsbuildinfo
+
+# Runtime data
+pids
+*.pid
+*.seed
+*.pid.lock
+
+# IntelliJ based IDEs
+.idea
+
+# VS Code (keep tasks.json)
+.vscode/settings.json
+.vscode/launch.json
+!.vscode/tasks.json
+
+# Temporary folders
+tmp/
+temp/
+
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+Icon
+._*
+.DocumentRevisions-V100
+.fseventsd
+.Spotlight-V100
+.TemporaryItems
+.Trashes
+.VolumeIcon.icns
+.com.apple.timemachine.donotpresent
+
+# Editor backups
+*.swp
+*.swo
+*~
+\#*\#
+/.emacs.desktop
+/.emacs.desktop.lock
+*.elc
+auto-save-list
+tramp
+.\#*
+
+# System files
+Thumbs.db
+ehthumbs.db
+Desktop.ini

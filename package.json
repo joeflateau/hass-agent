@@ -1,0 +1,41 @@
+{
+  "name": "hass-agent",
+  "version": "1.0.0",
+  "description": "macOS power and battery status agent for Home Assistant via MQTT",
+  "main": "index.ts",
+  "module": "index.ts",
+  "type": "module",
+  "private": true,
+  "scripts": {
+    "dev": "bun run index.ts",
+    "build": "bun build --compile --minify --sourcemap ./index.ts --outfile hass-agent",
+    "start": "./hass-agent"
+  },
+  "keywords": [
+    "home-assistant",
+    "mqtt",
+    "macos",
+    "battery",
+    "power",
+    "system-monitor"
+  ],
+  "author": "",
+  "license": "MIT",
+  "devDependencies": {
+    "@types/bun": "latest"
+  },
+  "peerDependencies": {
+    "typescript": "^5"
+  },
+  "dependencies": {
+    "@types/node": "^24.1.0",
+    "mqtt": "^5.14.0",
+    "zod": "^4.0.14"
+  },
+  "engines": {
+    "bun": ">=1.0.0"
+  },
+  "os": [
+    "darwin"
+  ]
+}

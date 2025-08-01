@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+    <dict>
+        <key>Label</key>
+        <string>com.homeassistant.agent</string>
+        <key>ProgramArguments</key>
+        <array>
+            <string>/Users/joeflateau/Projects/hass-agent/hass-agent</string>
+        </array>
+        <key>RunAtLoad</key>
+        <true/>
+        <key>KeepAlive</key>
+        <true/>
+        <key>StandardOutPath</key>
+        <string>/tmp/hass-agent.log</string>
+        <key>StandardErrorPath</key>
+        <string>/tmp/hass-agent.error.log</string>
+        <key>EnvironmentVariables</key>
+        <dict>
+            <key>MQTT_BROKER</key>
+            <string>mqtt://homeassistant.local:1883</string>
+            <key>DEVICE_ID</key>
+            <string>macos-macbook-pro-001</string>
+            <key>DEVICE_NAME</key>
+            <string>macOS-System</string>
+            <key>UPDATE_INTERVAL</key>
+            <string>30000</string>
+            <!-- Add MQTT_USERNAME and MQTT_PASSWORD if needed -->
+        </dict>
+    </dict>
+</plist>
