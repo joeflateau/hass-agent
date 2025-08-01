@@ -6,10 +6,30 @@
 set -e
 
 REPO="__GITHUB_REPOSITORY__"  # Will be replaced during release
+RELEASE_VERSION="__VERSION__"  # Will be replaced during release
+
+# Error if placeholders were not replaced during build process
+if [[ "$REPO" == "__GITHUB_REPOSITORY__" ]]; then
+    echo "❌ Error: Repository placeholder was not replaced during build process"
+    exit 1
+fi
+
+if [[ "$RELEASE_VERSION" == "__VERSION__" ]]; then
+    echo "❌ Error: Version placeholder was not replaced during build process"
+    exit 1
+fi
+
 INSTALL_DIR="$HOME/.local/bin"
 SERVICE_NAME="com.homeassistant.agent"
 LAUNCH_AGENTS_DIR="$HOME/Library/LaunchAgents"
 PLIST_PATH="$LAUNCH_AGENTS_DIR/$SERVICE_NAME.plist"
+INSTALLED_VERSION="${INSTALLED_VERSION:-unknown}"
+
+# Detect if this is an upgrade (binary already exists)
+IS_UPGRADE=false
+if [[ -f "$INSTALL_DIR/hass-agent" ]]; then
+    IS_UPGRADE=true
+fi
 
 # Colors for output
 RED='\033[0;31m'
@@ -18,7 +38,11 @@ YELLOW='\033[1;33m'
 BLUE='\033[0;34m'
 NC='\033[0m' # No Color
 
-echo -e "${BLUE}🏠 macOS Home Assistant Agent Installer${NC}"
+if [[ "$IS_UPGRADE" == "true" ]]; then
+    echo -e "${BLUE}🔄 macOS Home Assistant Agent Upgrader${NC}"
+else
+    echo -e "${BLUE}🏠 macOS Home Assistant Agent Installer${NC}"
+fi
 echo ""
 
 # Function to print colored output
@@ -75,6 +99,12 @@ esac
 
 log_info "Detected architecture: $ARCH_NAME"
 
+# Check if we're already running the latest version
+if [[ "$INSTALLED_VERSION" != "unknown" && "$INSTALLED_VERSION" == "$RELEASE_VERSION" ]]; then
+    log_success "Already running the latest version ($INSTALLED_VERSION)"
+    exit 0
+fi
+
 # Get latest release info
 log_info "Fetching latest release information..."
 LATEST_RELEASE=$(curl -s "https://api.github.com/repos/$REPO/releases/latest")
@@ -104,7 +134,7 @@ if [[ -z "$VERSION" || -z "$DOWNLOAD_URL" ]]; then
     exit 1
 fi
 
-log_info "Latest version: $VERSION ($ARCH_NAME)"
+log_info "Installing version: $RELEASE_VERSION ($ARCH_NAME)"
 
 # Create install directory
 mkdir -p "$INSTALL_DIR"
@@ -183,7 +213,11 @@ launchctl load "$PLIST_PATH"
 # Cleanup
 rm -rf "$TEMP_DIR"
 
-log_success "Installation complete!"
+if [[ "$IS_UPGRADE" == "true" ]]; then
+    log_success "Upgrade complete!"
+else
+    log_success "Installation complete!"
+fi
 echo ""
 log_info "Configuration:"
 echo "   📁 Config directory: $CONFIG_DIR"
@@ -209,8 +243,10 @@ else
     log_warning "Service may not have started properly. Check logs for details."
 fi
 
-echo ""
-log_info "Next steps:"
-echo "   1. Edit $CONFIG_DIR/.env with your MQTT broker settings"
-echo "   2. Restart the service if you made configuration changes"
-echo "   3. Check Home Assistant for new device entities"
+if [[ "$IS_UPGRADE" == "false" ]]; then
+    echo ""
+    log_info "Next steps:"
+    echo "   1. Edit $CONFIG_DIR/.env with your MQTT broker settings"
+    echo "   2. Restart the service if you made configuration changes"
+    echo "   3. Check Home Assistant for new device entities"
+fi

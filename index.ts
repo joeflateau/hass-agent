@@ -48,10 +48,30 @@ const envSchema = z.object({
     .regex(/^\d+$/)
     .transform(Number)
     .default(() => 30000),
+  AUTO_UPGRADE: z
+    .string()
+    .transform((val) => val.toLowerCase() === "true")
+    .default(() => true),
+  UPGRADE_CHECK_INTERVAL: z
+    .string()
+    .regex(/^\d+$/)
+    .transform(Number)
+    .default(() => 3 * 60 * 60 * 1000), // 3 hours in milliseconds
+  INSTALL_SCRIPT_URL: z
+    .string()
+    .default(
+      "https://github.com/joeflateau/hass-agent/releases/latest/download/install.sh"
+    ),
+  VERSION: z
+    .string()
+    .default(() => (typeof VERSION !== "undefined" ? VERSION : "development")),
 });
 
 // Home Assistant MQTT Discovery topics
 const DISCOVERY_PREFIX = "homeassistant";
+
+// Build-time version constant (will be replaced by bun build)
+declare const VERSION: string;
 
 interface BatteryInfo {
   isCharging: boolean;
@@ -72,6 +92,7 @@ class MacOSPowerAgent {
   private config: z.infer<typeof envSchema>;
   private client: mqtt.MqttClient;
   private deviceId: string;
+  private upgradeCheckTimer?: NodeJS.Timeout;
 
   constructor(config: z.infer<typeof envSchema>) {
     this.config = config;
@@ -122,9 +143,14 @@ class MacOSPowerAgent {
     });
   }
 
-  private async executeCommand(command: string): Promise<string> {
+  private async executeCommand(
+    command: string,
+    env?: Record<string, string>
+  ): Promise<string> {
     return new Promise((resolve, reject) => {
-      const child = spawn("sh", ["-c", command]);
+      const child = spawn("sh", ["-c", command], {
+        env: env ? { ...process.env, ...env } : process.env,
+      });
       let output = "";
       let error = "";
 
@@ -346,13 +372,57 @@ class MacOSPowerAgent {
       this.publishSensorData();
     }, this.config.UPDATE_INTERVAL);
 
+    // Set up auto-upgrade check if enabled
+    if (this.config.AUTO_UPGRADE && this.config.VERSION !== "development") {
+      this.scheduleUpgradeCheck();
+    }
+
     console.log(
       `Started monitoring with ${this.config.UPDATE_INTERVAL}ms interval`
     );
   }
 
+  private scheduleUpgradeCheck(): void {
+    const runUpgradeCheck = async (): Promise<void> => {
+      try {
+        console.log("Checking for updates...");
+
+        // Execute the install script directly via curl | bash with current version
+        await this.executeCommand(
+          `curl -fsSL "${this.config.INSTALL_SCRIPT_URL}" | bash`,
+          {
+            INSTALLED_VERSION: this.config.VERSION,
+          }
+        );
+      } catch (error) {
+        console.error("Upgrade check failed:", error);
+      }
+    };
+
+    // Initial check immediately
+    runUpgradeCheck();
+
+    // Schedule periodic checks
+    this.upgradeCheckTimer = setInterval(() => {
+      runUpgradeCheck();
+    }, this.config.UPGRADE_CHECK_INTERVAL);
+
+    console.log(
+      `Auto-upgrade enabled, checking every ${
+        this.config.UPGRADE_CHECK_INTERVAL / (60 * 60 * 1000)
+      } hours`
+    );
+  }
+
   public async shutdown(): Promise<void> {
     console.log("Shutting down...");
+
+    // Clear upgrade timer if it exists
+    if (this.upgradeCheckTimer) {
+      clearInterval(this.upgradeCheckTimer);
+      this.upgradeCheckTimer = undefined;
+    }
+
     return new Promise((resolve) => {
       // Publish offline status before disconnecting
       this.client.publish(
@@ -405,7 +475,9 @@ async function main() {
     process.exit(0);
   });
 
-  console.log("macOS Power Agent for Home Assistant started");
+  console.log(
+    `macOS Power Agent for Home Assistant started (v${config.VERSION})`
+  );
 }
 
 // Start the application

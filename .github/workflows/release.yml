@@ -22,6 +22,17 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
+      - name: Set version from tag
+        id: version
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo "VERSION=${{ github.event.inputs.tag }}" >> $GITHUB_OUTPUT
+            echo "TAG_NAME=${{ github.event.inputs.tag }}" >> $GITHUB_OUTPUT
+          else
+            echo "VERSION=${GITHUB_REF#refs/tags/}" >> $GITHUB_OUTPUT
+            echo "TAG_NAME=${GITHUB_REF#refs/tags/}" >> $GITHUB_OUTPUT
+          fi
+
       - name: Setup Bun
         uses: oven-sh/setup-bun@v2
         with:
@@ -32,11 +43,11 @@ jobs:
 
       - name: Build executable for Apple Silicon (arm64)
         run: |
-          bun build --compile --minify --sourcemap ./index.ts --outfile hass-agent-arm64 --target bun-darwin-arm64
+          bun build --compile --minify --sourcemap ./index.ts --outfile hass-agent-arm64 --target bun-darwin-arm64 --define VERSION=\"${{ steps.version.outputs.VERSION }}\"
 
       - name: Build executable for Intel (x64)
         run: |
-          bun build --compile --minify --sourcemap ./index.ts --outfile hass-agent-x64 --target bun-darwin-x64
+          bun build --compile --minify --sourcemap ./index.ts --outfile hass-agent-x64 --target bun-darwin-x64 --define VERSION=\"${{ steps.version.outputs.VERSION }}\"
 
       - name: Create universal binary
         run: |
@@ -57,17 +68,6 @@ jobs:
           echo "=== x64 Binary ==="
           ls -la hass-agent-x64
           file hass-agent-x64
-
-      - name: Set version from tag
-        id: version
-        run: |
-          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
-            echo "VERSION=${{ github.event.inputs.tag }}" >> $GITHUB_OUTPUT
-            echo "TAG_NAME=${{ github.event.inputs.tag }}" >> $GITHUB_OUTPUT
-          else
-            echo "VERSION=${GITHUB_REF#refs/tags/}" >> $GITHUB_OUTPUT
-            echo "TAG_NAME=${GITHUB_REF#refs/tags/}" >> $GITHUB_OUTPUT
-          fi
 
       - name: Create release archive
         run: |
@@ -98,10 +98,10 @@ jobs:
           chmod +x release-x64/hass-agent release-x64/install.sh
           tar -czf hass-agent-${{ steps.version.outputs.VERSION }}-macos-x64.tar.gz -C release-x64 .
 
-      - name: Prepare remote install script
+      - name: Prepare install script
         run: |
-          sed "s|__GITHUB_REPOSITORY__|${{ github.repository }}|g" .github/install.sh > remote-install.sh
-          chmod +x remote-install.sh
+          sed -e "s|__GITHUB_REPOSITORY__|${{ github.repository }}|g" -e "s|__VERSION__|${{ steps.version.outputs.VERSION }}|g" .github/install.sh > install.sh
+          chmod +x install.sh
 
       - name: Generate checksums
         run: |
@@ -111,7 +111,7 @@ jobs:
           shasum -a 256 hass-agent >> checksums.txt
           shasum -a 256 hass-agent-arm64 >> checksums.txt
           shasum -a 256 hass-agent-x64 >> checksums.txt
-          shasum -a 256 remote-install.sh >> checksums.txt
+          shasum -a 256 install.sh >> checksums.txt
 
       - name: Create or update tag (for workflow_dispatch)
         if: github.event_name == 'workflow_dispatch'
@@ -136,7 +136,7 @@ jobs:
             ### Quick Install (recommended)
 
             ```bash
-            curl -fsSL https://github.com/${{ github.repository }}/releases/download/${{ steps.version.outputs.TAG_NAME }}/remote-install.sh | bash
+            curl -fsSL https://github.com/${{ github.repository }}/releases/download/${{ steps.version.outputs.TAG_NAME }}/install.sh | bash
             ```
 
             ### Manual Install
@@ -174,7 +174,7 @@ jobs:
             hass-agent
             hass-agent-arm64
             hass-agent-x64
-            remote-install.sh
+            install.sh
             checksums.txt
           draft: false
           prerelease: false

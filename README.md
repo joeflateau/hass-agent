@@ -26,7 +26,7 @@ A TypeScript/Bun single file executable that monitors macOS power and battery st
 Download and install the latest release automatically:
 
 ```bash
-curl -fsSL https://github.com/joeflateau/hass-agent/releases/latest/download/remote-install.sh | bash
+curl -fsSL https://github.com/joeflateau/hass-agent/releases/latest/download/install.sh | bash
 ```
 
 This will:
@@ -90,16 +90,59 @@ UPDATE_INTERVAL=30000  # 30 seconds
 
 ### Environment Variables
 
-| Variable          | Description                     | Required | Default                 |
-| ----------------- | ------------------------------- | -------- | ----------------------- |
-| `MQTT_BROKER`     | MQTT broker URL                 | No       | `mqtt://localhost:1883` |
-| `MQTT_USERNAME`   | MQTT username                   | No       | -                       |
-| `MQTT_PASSWORD`   | MQTT password                   | No       | -                       |
-| `DEVICE_ID`       | **Unique device identifier**    | **Yes**  | -                       |
-| `DEVICE_NAME`     | Device name in Home Assistant   | No       | System hostname         |
-| `UPDATE_INTERVAL` | Update interval in milliseconds | No       | `30000`                 |
+| Variable                 | Description                      | Required | Default                        |
+| ------------------------ | -------------------------------- | -------- | ------------------------------ |
+| `MQTT_BROKER`            | MQTT broker URL                  | No       | `mqtt://localhost:1883`        |
+| `MQTT_USERNAME`          | MQTT username                    | No       | -                              |
+| `MQTT_PASSWORD`          | MQTT password                    | No       | -                              |
+| `DEVICE_ID`              | **Unique device identifier**     | **Yes**  | -                              |
+| `DEVICE_NAME`            | Device name in Home Assistant    | No       | System hostname                |
+| `UPDATE_INTERVAL`        | Update interval in milliseconds  | No       | `30000`                        |
+| `AUTO_UPGRADE`           | Enable automatic upgrades        | No       | `true`                         |
+| `UPGRADE_CHECK_INTERVAL` | Auto-upgrade check interval (ms) | No       | `10800000` (3 hours)           |
+| `INSTALL_SCRIPT_URL`     | URL to install script            | No       | GitHub releases install script |
 
 > **Important**: `DEVICE_ID` must be unique across all your Home Assistant MQTT devices. Use a format like `macos-hostname-001` or similar.
+
+## Auto-Upgrade
+
+The agent includes built-in auto-upgrade functionality:
+
+- **Automatic Checks**: Periodically checks for new releases (default: every 3 hours)
+- **Smart Upgrades**: Uses a dedicated upgrade script that compares versions
+- **Zero-Downtime Updates**: Handles service stopping and restarting automatically
+- **Configurable**: Can be disabled or customized via environment variables
+
+### Auto-Upgrade Configuration
+
+```env
+# Enable auto-upgrade (default: true)
+AUTO_UPGRADE=true
+
+# Check for updates every 12 hours instead of default 3 hours
+UPGRADE_CHECK_INTERVAL=43200000
+
+# Use a custom install script URL (advanced)
+INSTALL_SCRIPT_URL=https://github.com/joeflateau/hass-agent/releases/latest/download/install.sh
+```
+
+### Manual Upgrade
+
+You can also manually upgrade by running the install script:
+
+```bash
+curl -fsSL https://github.com/joeflateau/hass-agent/releases/latest/download/install.sh | bash
+```
+
+### Disabling Auto-Upgrade
+
+To disable automatic upgrades:
+
+```env
+AUTO_UPGRADE=false
+```
+
+Or remove the environment variable entirely (defaults to enabled).
 
 ## Usage
 
@@ -161,7 +204,7 @@ launchctl load ~/Library/LaunchAgents/com.homeassistant.agent.plist
 Simply run the install script again to update to the latest version:
 
 ```bash
-curl -fsSL https://github.com/joeflateau/hass-agent/releases/latest/download/remote-install.sh | bash
+curl -fsSL https://github.com/joeflateau/hass-agent/releases/latest/download/install.sh | bash
 ```
 
 ### Manual update
