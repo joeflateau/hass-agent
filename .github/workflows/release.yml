@@ -97,7 +97,7 @@ jobs:
 
       - name: Prepare remote install script
         run: |
-          sed "s/__GITHUB_REPOSITORY__/${{ github.repository }}/g" .github/install.sh > remote-install.sh
+          sed "s|__GITHUB_REPOSITORY__|${{ github.repository }}|g" .github/install.sh > remote-install.sh
           chmod +x remote-install.sh
 
       - name: Generate checksums
