@@ -249,7 +249,7 @@ class MacOSPowerAgent {
       name: this.config.DEVICE_NAME,
       model: "macOS System Monitor",
       manufacturer: "Apple",
-      sw_version: require("os").release(),
+      sw_version: `${this.config.VERSION} (macOS ${require("os").release()})`,
     };
 
     // Battery Level Sensor
