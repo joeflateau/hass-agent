@@ -1,0 +1,180 @@
+name: Build and Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Tag to create (e.g., v1.0.0)'
+        required: true
+        type: string
+
+jobs:
+  build-and-release:
+    runs-on: macos-latest
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      
+    - name: Setup Bun
+      uses: oven-sh/setup-bun@v2
+      with:
+        bun-version: latest
+        
+    - name: Install dependencies
+      run: bun install
+      
+    - name: Build executable for Apple Silicon (arm64)
+      run: |
+        bun build --compile --minify --sourcemap ./index.ts --outfile hass-agent-arm64 --target bun-darwin-arm64
+        
+    - name: Build executable for Intel (x64)
+      run: |
+        bun build --compile --minify --sourcemap ./index.ts --outfile hass-agent-x64 --target bun-darwin-x64
+        
+    - name: Create universal binary
+      run: |
+        lipo -create -output hass-agent hass-agent-arm64 hass-agent-x64
+        chmod +x hass-agent
+        
+    - name: Verify executables
+      run: |
+        echo "=== Universal Binary ==="
+        ls -la hass-agent
+        file hass-agent
+        lipo -info hass-agent
+        echo ""
+        echo "=== ARM64 Binary ==="
+        ls -la hass-agent-arm64
+        file hass-agent-arm64
+        echo ""
+        echo "=== x64 Binary ==="
+        ls -la hass-agent-x64
+        file hass-agent-x64
+        
+    - name: Set version from tag
+      id: version
+      run: |
+        if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+          echo "VERSION=${{ github.event.inputs.tag }}" >> $GITHUB_OUTPUT
+          echo "TAG_NAME=${{ github.event.inputs.tag }}" >> $GITHUB_OUTPUT
+        else
+          echo "VERSION=${GITHUB_REF#refs/tags/}" >> $GITHUB_OUTPUT
+          echo "TAG_NAME=${GITHUB_REF#refs/tags/}" >> $GITHUB_OUTPUT
+        fi
+        
+    - name: Create release archive
+      run: |
+        mkdir -p release
+        cp hass-agent release/
+        cp hass-agent-arm64 release/
+        cp hass-agent-x64 release/
+        cp README.md release/
+        cp CHANGELOG.md release/
+        cp .env.example release/
+        cp com.homeassistant.agent.plist release/
+        cp install.sh release/
+        chmod +x release/hass-agent
+        chmod +x release/hass-agent-arm64
+        chmod +x release/hass-agent-x64
+        chmod +x release/install.sh
+        tar -czf hass-agent-${{ steps.version.outputs.VERSION }}-macos.tar.gz -C release .
+        
+        # Create architecture-specific archives
+        mkdir -p release-arm64 release-x64
+        cp hass-agent-arm64 release-arm64/hass-agent
+        cp README.md CHANGELOG.md .env.example com.homeassistant.agent.plist install.sh release-arm64/
+        chmod +x release-arm64/hass-agent release-arm64/install.sh
+        tar -czf hass-agent-${{ steps.version.outputs.VERSION }}-macos-arm64.tar.gz -C release-arm64 .
+        
+        cp hass-agent-x64 release-x64/hass-agent
+        cp README.md CHANGELOG.md .env.example com.homeassistant.agent.plist install.sh release-x64/
+        chmod +x release-x64/hass-agent release-x64/install.sh
+        tar -czf hass-agent-${{ steps.version.outputs.VERSION }}-macos-x64.tar.gz -C release-x64 .
+        
+    - name: Prepare remote install script
+      run: |
+        sed "s/__GITHUB_REPOSITORY__/${{ github.repository }}/g" .github/install.sh > remote-install.sh
+        chmod +x remote-install.sh
+        
+    - name: Generate checksums
+      run: |
+        shasum -a 256 hass-agent-${{ steps.version.outputs.VERSION }}-macos.tar.gz > checksums.txt
+        shasum -a 256 hass-agent-${{ steps.version.outputs.VERSION }}-macos-arm64.tar.gz >> checksums.txt
+        shasum -a 256 hass-agent-${{ steps.version.outputs.VERSION }}-macos-x64.tar.gz >> checksums.txt
+        shasum -a 256 hass-agent >> checksums.txt
+        shasum -a 256 hass-agent-arm64 >> checksums.txt
+        shasum -a 256 hass-agent-x64 >> checksums.txt
+        shasum -a 256 remote-install.sh >> checksums.txt
+        
+    - name: Create or update tag (for workflow_dispatch)
+      if: github.event_name == 'workflow_dispatch'
+      run: |
+        git config user.name github-actions
+        git config user.email github-actions@github.com
+        git tag -a ${{ steps.version.outputs.TAG_NAME }} -m "Release ${{ steps.version.outputs.TAG_NAME }}"
+        git push origin ${{ steps.version.outputs.TAG_NAME }}
+        
+    - name: Create Release
+      uses: softprops/action-gh-release@v2
+      with:
+        tag_name: ${{ steps.version.outputs.TAG_NAME }}
+        name: Release ${{ steps.version.outputs.VERSION }}
+        body: |
+          ## Changes
+          
+          <!-- Add release notes here -->
+          
+          ## Installation
+          
+          ### Quick Install (recommended)
+          
+          ```bash
+          curl -fsSL https://github.com/${{ github.repository }}/releases/download/${{ steps.version.outputs.TAG_NAME }}/remote-install.sh | bash
+          ```
+          
+          ### Manual Install
+          
+          **Universal Binary (recommended):**
+          1. Download `hass-agent-${{ steps.version.outputs.VERSION }}-macos.tar.gz`
+          2. Extract: `tar -xzf hass-agent-${{ steps.version.outputs.VERSION }}-macos.tar.gz`
+          3. Make executable: `chmod +x hass-agent`
+          4. Configure `.env` file
+          5. Run: `./hass-agent`
+          
+          **Architecture-specific binaries:**
+          - Apple Silicon: `hass-agent-${{ steps.version.outputs.VERSION }}-macos-arm64.tar.gz`
+          - Intel Macs: `hass-agent-${{ steps.version.outputs.VERSION }}-macos-x64.tar.gz`
+          - Individual binaries: `hass-agent-arm64`, `hass-agent-x64`, `hass-agent` (universal)
+          
+          ## Verification
+          
+          Verify the download integrity using the checksums:
+          
+          ```bash
+          shasum -a 256 -c checksums.txt
+          ```
+          
+          ## Requirements
+          
+          - macOS (Intel or Apple Silicon)
+          - MQTT broker (Home Assistant built-in or external)
+          - Home Assistant with MQTT integration
+          
+        files: |
+          hass-agent-${{ steps.version.outputs.VERSION }}-macos.tar.gz
+          hass-agent-${{ steps.version.outputs.VERSION }}-macos-arm64.tar.gz
+          hass-agent-${{ steps.version.outputs.VERSION }}-macos-x64.tar.gz
+          hass-agent
+          hass-agent-arm64
+          hass-agent-x64
+          remote-install.sh
+          checksums.txt
+        draft: false
+        prerelease: false
+        generate_release_notes: true
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

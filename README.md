@@ -21,6 +21,35 @@ A TypeScript/Bun single file executable that monitors macOS power and battery st
 
 ## Installation
 
+### Option 1: Quick Install from GitHub Release (Recommended)
+
+Download and install the latest release automatically:
+
+```bash
+curl -fsSL https://github.com/joeflateau/hass-agent/releases/latest/download/remote-install.sh | bash
+```
+
+This will:
+- Download the latest version
+- Install to `~/.local/bin/hass-agent`
+- Create a LaunchAgent for automatic startup
+- Set up configuration directory at `~/.config/hass-agent`
+
+### Option 2: Manual Installation from Release
+
+1. **Download the latest release:**
+   - Go to [Releases](https://github.com/joeflateau/hass-agent/releases)
+   - Download `hass-agent-vX.X.X-macos.tar.gz`
+
+2. **Extract and install:**
+   ```bash
+   tar -xzf hass-agent-vX.X.X-macos.tar.gz
+   chmod +x hass-agent
+   ./install.sh
+   ```
+
+### Option 3: Build from Source
+
 1. **Clone and setup:**
 
    ```bash
@@ -122,6 +151,30 @@ Load the service:
 ```bash
 launchctl load ~/Library/LaunchAgents/com.homeassistant.agent.plist
 ```
+
+## Updating
+
+### Auto-installed version (recommended method)
+
+Simply run the install script again to update to the latest version:
+
+```bash
+curl -fsSL https://github.com/joeflateau/hass-agent/releases/latest/download/remote-install.sh | bash
+```
+
+### Manual update
+
+1. Stop the current service:
+   ```bash
+   launchctl unload ~/Library/LaunchAgents/com.homeassistant.agent.plist
+   ```
+
+2. Download and install the new version (see Installation section)
+
+3. Start the service:
+   ```bash
+   launchctl load ~/Library/LaunchAgents/com.homeassistant.agent.plist
+   ```
 
 ## Home Assistant Integration
 

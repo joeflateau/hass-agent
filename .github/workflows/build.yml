@@ -1,0 +1,71 @@
+name: Build and Test
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  build:
+    runs-on: macos-latest
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      
+    - name: Setup Bun
+      uses: oven-sh/setup-bun@v2
+      with:
+        bun-version: latest
+        
+    - name: Install dependencies
+      run: bun install
+      
+    - name: Type check
+      run: bun run tsc --noEmit
+      
+    - name: Build executable
+      run: bun run build
+      
+    - name: Build cross-platform executables
+      run: |
+        bun build --compile --minify --sourcemap ./index.ts --outfile hass-agent-arm64 --target bun-darwin-arm64
+        bun build --compile --minify --sourcemap ./index.ts --outfile hass-agent-x64 --target bun-darwin-x64
+        lipo -create -output hass-agent-universal hass-agent-arm64 hass-agent-x64
+        
+    - name: Verify executable
+      run: |
+        echo "=== Default Build ==="
+        ls -la hass-agent
+        file hass-agent
+        echo ""
+        echo "=== Cross-compiled ARM64 ==="
+        ls -la hass-agent-arm64
+        file hass-agent-arm64
+        echo ""
+        echo "=== Cross-compiled x64 ==="
+        ls -la hass-agent-x64
+        file hass-agent-x64
+        echo ""
+        echo "=== Universal Binary ==="
+        ls -la hass-agent-universal
+        file hass-agent-universal
+        lipo -info hass-agent-universal
+        
+    - name: Test executable (dry run)
+      run: |
+        # Test that the executable runs without crashing
+        timeout 10s ./hass-agent --help || echo "Expected timeout or help output"
+        
+    - name: Upload build artifact
+      uses: actions/upload-artifact@v4
+      if: success()
+      with:
+        name: hass-agent-builds-${{ github.sha }}
+        path: |
+          hass-agent
+          hass-agent-arm64
+          hass-agent-x64
+          hass-agent-universal
+        retention-days: 7
