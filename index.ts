@@ -81,6 +81,16 @@ class MacOSPowerAgent {
       password: this.config.MQTT_PASSWORD,
       clientId: `hass-agent-${this.deviceId}`,
       forceNativeWebSocket: true,
+      reconnectOnConnackError: true,
+      reconnectPeriod: 5000,
+      connectTimeout: 30000,
+      clean: true,
+      will: {
+        topic: `${DISCOVERY_PREFIX}/status/${this.deviceId}`,
+        payload: "offline",
+        qos: 1,
+        retain: true,
+      },
     });
 
     this.setupMqttClient();
@@ -90,6 +100,12 @@ class MacOSPowerAgent {
     this.client.on("connect", () => {
       console.log("Connected to MQTT broker");
       this.publishDiscoveryConfigs();
+      // Publish online status after discovery configs
+      this.client.publish(
+        `${DISCOVERY_PREFIX}/status/${this.deviceId}`,
+        "online",
+        { qos: 1, retain: true }
+      );
       this.startMonitoring();
     });
 
@@ -338,10 +354,18 @@ class MacOSPowerAgent {
   public async shutdown(): Promise<void> {
     console.log("Shutting down...");
     return new Promise((resolve) => {
-      this.client.end(false, {}, () => {
-        console.log("MQTT client disconnected");
-        resolve();
-      });
+      // Publish offline status before disconnecting
+      this.client.publish(
+        `${DISCOVERY_PREFIX}/status/${this.deviceId}`,
+        "offline",
+        { qos: 1, retain: true },
+        () => {
+          this.client.end(false, {}, () => {
+            console.log("MQTT client disconnected");
+            resolve();
+          });
+        }
+      );
     });
   }
 }
