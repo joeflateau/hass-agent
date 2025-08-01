@@ -30,6 +30,7 @@ curl -fsSL https://github.com/joeflateau/hass-agent/releases/latest/download/rem
 ```
 
 This will:
+
 - Download the latest version
 - Install to `~/.local/bin/hass-agent`
 - Create a LaunchAgent for automatic startup
@@ -38,6 +39,7 @@ This will:
 ### Option 2: Manual Installation from Release
 
 1. **Download the latest release:**
+
    - Go to [Releases](https://github.com/joeflateau/hass-agent/releases)
    - Download `hass-agent-vX.X.X-macos.tar.gz`
 
@@ -165,6 +167,7 @@ curl -fsSL https://github.com/joeflateau/hass-agent/releases/latest/download/rem
 ### Manual update
 
 1. Stop the current service:
+
    ```bash
    launchctl unload ~/Library/LaunchAgents/com.homeassistant.agent.plist
    ```

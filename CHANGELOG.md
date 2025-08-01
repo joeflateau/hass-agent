@@ -8,15 +8,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+
 ### Changed
+
 ### Deprecated
+
 ### Removed
+
 ### Fixed
+
 ### Security
 
 ## [1.0.0] - 2025-01-31
 
 ### Added
+
 - Initial release
 - Battery monitoring for macOS systems
 - Power source detection (AC power, battery, UPS)
@@ -28,6 +34,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Environment variable configuration with Zod validation
 
 ### Features
+
 - Monitors battery level, charging status, and time remaining
 - Detects power source changes
 - Automatic device registration in Home Assistant
