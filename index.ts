@@ -80,16 +80,10 @@ class MacOSPowerAgent {
       username: this.config.MQTT_USERNAME,
       password: this.config.MQTT_PASSWORD,
       clientId: `hass-agent-${this.deviceId}`,
-      clean: true,
-      reconnectPeriod: 5000,
+      forceNativeWebSocket: true,
     });
 
     this.setupMqttClient();
-  }
-
-  private generateDeviceId(): string {
-    const hostname = require("os").hostname();
-    return `macos-${hostname.toLowerCase().replace(/\./g, "-")}`;
   }
 
   private setupMqttClient(): void {
