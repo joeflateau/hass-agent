@@ -12,7 +12,8 @@
     "build:arm64": "bun build --compile --minify --sourcemap ./index.ts --outfile hass-agent-arm64 --target bun-darwin-arm64",
     "build:x64": "bun build --compile --minify --sourcemap ./index.ts --outfile hass-agent-x64 --target bun-darwin-x64",
     "build:universal": "npm run build:arm64 && npm run build:x64 && lipo -create -output hass-agent hass-agent-arm64 hass-agent-x64",
-    "start": "./hass-agent"
+    "start": "./hass-agent",
+    "release": "scripts/tag-release.sh ${RELEASE_TYPE:-patch}"
   },
   "keywords": [
     "home-assistant",
