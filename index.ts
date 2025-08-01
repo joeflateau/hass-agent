@@ -3,7 +3,23 @@
 import { spawn } from "child_process";
 import * as mqtt from "mqtt";
 import { hostname } from "os";
+import winston from "winston";
 import { z } from "zod";
+
+// Configure Winston logger with timestamps
+const logger = winston.createLogger({
+  level: "info",
+  format: winston.format.combine(
+    winston.format.timestamp({
+      format: "YYYY-MM-DD HH:mm:ss",
+    }),
+    winston.format.colorize(),
+    winston.format.printf(({ timestamp, level, message }) => {
+      return `${timestamp} [${level}] ${message}`;
+    })
+  ),
+  transports: [new winston.transports.Console()],
+});
 
 // Helper function to get macOS computer name
 async function getComputerName(): Promise<string> {
@@ -126,14 +142,14 @@ class MacOSPowerAgent {
       const diffMs = now.getTime() - bootTime.getTime();
       return Math.floor(diffMs / 60000); // minutes
     } catch (error) {
-      console.error("Error getting uptime:", error);
+      logger.error(`Error getting uptime: ${error}`);
       return -1;
     }
   }
 
   private setupMqttClient(): void {
     this.client.on("connect", () => {
-      console.log("Connected to MQTT broker");
+      logger.info("Connected to MQTT broker");
       this.publishDiscoveryConfigs();
       // Publish online status after discovery configs
       this.client.publish(
@@ -145,15 +161,15 @@ class MacOSPowerAgent {
     });
 
     this.client.on("error", (error) => {
-      console.error("MQTT connection error:", error);
+      logger.error(`MQTT connection error: ${error}`);
     });
 
     this.client.on("offline", () => {
-      console.log("MQTT client offline");
+      logger.warn("MQTT client offline");
     });
 
     this.client.on("reconnect", () => {
-      console.log("Reconnecting to MQTT broker...");
+      logger.info("Reconnecting to MQTT broker...");
     });
   }
 
@@ -234,7 +250,7 @@ class MacOSPowerAgent {
             : "Unknown",
       };
     } catch (error) {
-      console.error("Error getting battery info:", error);
+      logger.error(`Error getting battery info: ${error}`);
       return null;
     }
   }
@@ -248,7 +264,7 @@ class MacOSPowerAgent {
         upsConnected: output.includes("UPS"),
       };
     } catch (error) {
-      console.error("Error getting power info:", error);
+      logger.error(`Error getting power info: ${error}`);
       return {
         acPower: false,
         batteryPower: false,
@@ -349,7 +365,7 @@ class MacOSPowerAgent {
       { retain: true }
     );
 
-    console.log("Published Home Assistant discovery configurations");
+    logger.info("Published Home Assistant discovery configurations");
   }
 
   private async publishSensorData(): Promise<void> {
@@ -378,7 +394,7 @@ class MacOSPowerAgent {
           JSON.stringify({ time_remaining: batteryInfo.timeRemaining })
         );
 
-        console.log(
+        logger.debug(
           `Battery: ${batteryInfo.batteryLevel}%, Charging: ${batteryInfo.isCharging}, Time: ${batteryInfo.timeRemaining}min`
         );
       }
@@ -395,12 +411,11 @@ class MacOSPowerAgent {
         JSON.stringify({ uptime: uptimeMinutes })
       );
 
-      console.log(
+      logger.debug(
         `AC Power: ${powerInfo.acPower}, Uptime: ${uptimeMinutes}min`
       );
-      console.log(`AC Power: ${powerInfo.acPower}`);
     } catch (error) {
-      console.error("Error publishing sensor data:", error);
+      logger.error(`Error publishing sensor data: ${error}`);
     }
   }
 
@@ -418,7 +433,7 @@ class MacOSPowerAgent {
       this.scheduleUpgradeCheck();
     }
 
-    console.log(
+    logger.info(
       `Started monitoring with ${this.config.UPDATE_INTERVAL}ms interval`
     );
   }
@@ -426,7 +441,7 @@ class MacOSPowerAgent {
   private scheduleUpgradeCheck(): void {
     const runUpgradeCheck = async (): Promise<void> => {
       try {
-        console.log("Checking for updates...");
+        logger.info("Checking for updates...");
 
         // Execute the install script directly via curl | bash with current version
         await this.executeCommand(
@@ -436,7 +451,7 @@ class MacOSPowerAgent {
           }
         );
       } catch (error) {
-        console.error("Upgrade check failed:", error);
+        logger.error(`Upgrade check failed: ${error}`);
       }
     };
 
@@ -448,7 +463,7 @@ class MacOSPowerAgent {
       runUpgradeCheck();
     }, this.config.UPGRADE_CHECK_INTERVAL);
 
-    console.log(
+    logger.info(
       `Auto-upgrade enabled, checking every ${
         this.config.UPGRADE_CHECK_INTERVAL / (60 * 60 * 1000)
       } hours`
@@ -456,7 +471,7 @@ class MacOSPowerAgent {
   }
 
   public async shutdown(): Promise<void> {
-    console.log("Shutting down...");
+    logger.info("Shutting down...");
 
     // Clear upgrade timer if it exists
     if (this.upgradeCheckTimer) {
@@ -472,7 +487,7 @@ class MacOSPowerAgent {
         { qos: 1, retain: true },
         () => {
           this.client.end(false, {}, () => {
-            console.log("MQTT client disconnected");
+            logger.info("MQTT client disconnected");
             resolve();
           });
         }
@@ -491,13 +506,13 @@ async function main() {
     const deviceName = rawConfig.DEVICE_NAME || (await getComputerName());
     config = { ...rawConfig, DEVICE_NAME: deviceName };
   } catch (error) {
-    console.error("❌ Environment variable validation failed:");
+    logger.error("❌ Environment variable validation failed:");
     if (error instanceof z.ZodError) {
       error.issues.forEach((err) => {
-        console.error(`  - ${err.path.join(".")}: ${err.message}`);
+        logger.error(`  - ${err.path.join(".")}: ${err.message}`);
       });
     }
-    console.error("\n💡 Please check your .env file or environment variables.");
+    logger.error("\n💡 Please check your .env file or environment variables.");
     process.exit(1);
   }
 
@@ -505,24 +520,24 @@ async function main() {
   const agent = new MacOSPowerAgent(config);
 
   process.on("SIGINT", async () => {
-    console.log("\nReceived SIGINT, shutting down gracefully...");
+    logger.info("\nReceived SIGINT, shutting down gracefully...");
     await agent.shutdown();
     process.exit(0);
   });
 
   process.on("SIGTERM", async () => {
-    console.log("\nReceived SIGTERM, shutting down gracefully...");
+    logger.info("\nReceived SIGTERM, shutting down gracefully...");
     await agent.shutdown();
     process.exit(0);
   });
 
-  console.log(
+  logger.info(
     `macOS Power Agent for Home Assistant started (v${config.VERSION})`
   );
 }
 
 // Start the application
 main().catch((error: any) => {
-  console.error("Fatal error:", error);
+  logger.error(`Fatal error: ${error}`);
   process.exit(1);
 });
