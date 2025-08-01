@@ -71,7 +71,7 @@ jobs:
 
       - name: Prepare install script
         run: |
-          sed -e "s|__GITHUB_REPOSITORY__|${{ github.repository }}|g" -e "s|__VERSION__|${{ steps.version.outputs.VERSION }}|g" .github/install.sh > install.sh
+          sed -e 's|REPO="__GITHUB_REPOSITORY__"|REPO="${{ github.repository }}"|' -e 's|RELEASE_VERSION="__VERSION__"|RELEASE_VERSION="${{ steps.version.outputs.VERSION }}"|' .github/install.sh > install.sh
           chmod +x install.sh
 
       - name: Create release archive
