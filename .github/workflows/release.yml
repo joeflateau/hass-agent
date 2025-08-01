@@ -69,6 +69,11 @@ jobs:
           ls -la hass-agent-x64
           file hass-agent-x64
 
+      - name: Prepare install script
+        run: |
+          sed -e "s|__GITHUB_REPOSITORY__|${{ github.repository }}|g" -e "s|__VERSION__|${{ steps.version.outputs.VERSION }}|g" .github/install.sh > install.sh
+          chmod +x install.sh
+
       - name: Create release archive
         run: |
           mkdir -p release
@@ -97,11 +102,6 @@ jobs:
           cp README.md CHANGELOG.md .env.example com.homeassistant.agent.plist install.sh release-x64/
           chmod +x release-x64/hass-agent release-x64/install.sh
           tar -czf hass-agent-${{ steps.version.outputs.VERSION }}-macos-x64.tar.gz -C release-x64 .
-
-      - name: Prepare install script
-        run: |
-          sed -e "s|__GITHUB_REPOSITORY__|${{ github.repository }}|g" -e "s|__VERSION__|${{ steps.version.outputs.VERSION }}|g" .github/install.sh > install.sh
-          chmod +x install.sh
 
       - name: Generate checksums
         run: |
