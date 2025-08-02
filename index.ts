@@ -246,7 +246,8 @@ class MacOSPowerAgent {
 
       return {
         isCharging:
-          chargingState.includes("charging") ||
+          (!chargingState.includes("discharging") &&
+            chargingState.includes("charging")) ||
           chargingState.includes("charged"),
         batteryLevel,
         timeRemaining,
