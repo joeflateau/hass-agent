@@ -142,11 +142,6 @@ log_info "Installing version: $RELEASE_VERSION ($ARCH_NAME)"
 # Create install directory
 mkdir -p "$INSTALL_DIR"
 
-# Stop existing service if running
-if launchctl list 2>/dev/null | grep -q "$SERVICE_NAME"; then
-    log_info "Stopping existing service..."
-    launchctl unload "$PLIST_PATH" 2>/dev/null || true
-fi
 
 # Download and extract
 log_info "Downloading $VERSION..."
@@ -164,10 +159,6 @@ fi
 log_info "Extracting archive..."
 tar -xzf "hass-agent.tar.gz"
 
-# Install executable
-log_info "Installing executable to $INSTALL_DIR..."
-cp hass-agent "$INSTALL_DIR/"
-chmod +x "$INSTALL_DIR/hass-agent"
 
 # Create config directory
 CONFIG_DIR="$HOME/.config/hass-agent"
@@ -208,6 +199,19 @@ cat > "$PLIST_PATH" << EOF
 </dict>
 </plist>
 EOF
+
+
+
+# Stop existing service if running
+if launchctl list 2>/dev/null | grep -q "$SERVICE_NAME"; then
+    log_info "Stopping existing service..."
+    launchctl unload "$PLIST_PATH" 2>/dev/null || true
+fi
+
+# Install executable
+log_info "Installing executable to $INSTALL_DIR..."
+cp hass-agent "$INSTALL_DIR/"
+chmod +x "$INSTALL_DIR/hass-agent"
 
 # Load the service
 log_info "Starting service..."
