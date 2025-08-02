@@ -1,6 +1,6 @@
 #!/usr/bin/env bun
 
-import { spawn } from "child_process";
+import { spawn, type SpawnOptions } from "child_process";
 import * as mqtt from "mqtt";
 import { hostname } from "os";
 import winston from "winston";
@@ -175,20 +175,18 @@ class MacOSPowerAgent {
 
   private async executeCommand(
     command: string,
-    env?: Record<string, string>
+    options?: SpawnOptions
   ): Promise<string> {
     return new Promise((resolve, reject) => {
-      const child = spawn("sh", ["-c", command], {
-        env: env ? { ...process.env, ...env } : process.env,
-      });
+      const child = spawn("sh", ["-c", command], { ...options });
       let output = "";
       let error = "";
 
-      child.stdout.on("data", (data) => {
+      child.stdout?.on("data", (data) => {
         output += data.toString();
       });
 
-      child.stderr.on("data", (data) => {
+      child.stderr?.on("data", (data) => {
         error += data.toString();
       });
 
@@ -447,7 +445,8 @@ class MacOSPowerAgent {
         await this.executeCommand(
           `curl -fsSL "${this.config.INSTALL_SCRIPT_URL}" | bash`,
           {
-            INSTALLED_VERSION: this.config.VERSION,
+            env: { ...process.env, INSTALLED_VERSION: this.config.VERSION },
+            stdio: "inherit",
           }
         );
       } catch (error) {
