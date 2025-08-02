@@ -122,6 +122,21 @@ class MacOSPowerAgent {
     this.setupMqttClient();
   }
 
+  public async initialize(): Promise<void> {
+    // Wait for MQTT connection before starting monitoring
+    return new Promise((resolve) => {
+      if (this.client.connected) {
+        this.startMonitoring();
+        resolve();
+      } else {
+        this.client.once("connect", () => {
+          this.startMonitoring();
+          resolve();
+        });
+      }
+    });
+  }
+
   private async getUptimeMinutes(): Promise<number> {
     try {
       const output = await this.executeCommand("sysctl kern.boottime");
@@ -152,7 +167,6 @@ class MacOSPowerAgent {
         "online",
         { qos: 1, retain: true }
       );
-      this.startMonitoring();
     });
 
     this.client.on("error", (error) => {
@@ -516,6 +530,9 @@ async function main() {
 
   // Handle graceful shutdown
   const agent = new MacOSPowerAgent(config);
+
+  // Initialize the agent (this will start monitoring once connected)
+  await agent.initialize();
 
   process.on("SIGINT", async () => {
     logger.info("\nReceived SIGINT, shutting down gracefully...");
