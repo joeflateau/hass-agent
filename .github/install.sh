@@ -5,11 +5,8 @@
 
 set -e
 
-# If we're not already running under nohup, restart with nohup and exit
-if [[ -z "${NOHUP_RUNNING:-}" ]]; then
-    export NOHUP_RUNNING=1
-    exec nohup bash "$0" "$@" > /tmp/hass-agent.update.log 2>&1
-fi
+# Set up logging and nohup for long-running install
+exec > >(tee /tmp/hass-agent.install.log) 2>&1
 
 REPO="__GITHUB_REPOSITORY__"  # Will be replaced during release
 RELEASE_VERSION="__VERSION__"  # Will be replaced during release
