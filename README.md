@@ -191,10 +191,22 @@ Create `~/Library/LaunchAgents/com.homeassistant.agent.plist`:
 </plist>
 ```
 
-Load the service:
+### Service Management
+
+Once the service is installed, you can manage it with these commands:
 
 ```bash
+# Stop the service
+launchctl unload ~/Library/LaunchAgents/com.homeassistant.agent.plist
+
+# Start the service
 launchctl load ~/Library/LaunchAgents/com.homeassistant.agent.plist
+
+# Restart the service
+launchctl unload ~/Library/LaunchAgents/com.homeassistant.agent.plist && launchctl load ~/Library/LaunchAgents/com.homeassistant.agent.plist
+
+# Check service status
+launchctl list | grep com.homeassistant.agent
 ```
 
 ## Updating
