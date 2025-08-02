@@ -5,7 +5,7 @@ describe("MacOS Power Agent", () => {
   describe("parsePmsetRawlogLine", () => {
     test("should parse battery line with AC power", () => {
       const line =
-        " AC Power; Charging; 85%; Cap=85: FCC=100; Design=8694; Time=1:23; 1500mA; Cycles=245/1000; Location=0;";
+        " AC; Charging; 85%; Cap=85: FCC=100; Design=8694; Time=1:23; 1500mA; Cycles=245/1000; Location=0;";
       const result = parsePmsetRawlogLine(line);
 
       expect(result).toEqual({
@@ -35,7 +35,7 @@ describe("MacOS Power Agent", () => {
 
     test("should parse battery line with charging status", () => {
       const line =
-        " AC Power; Charging; 45%; Cap=45: FCC=100; Design=8694; Time=2:15; 2000mA; Cycles=123/1000; Location=0;";
+        " AC; Charging; 45%; Cap=45: FCC=100; Design=8694; Time=2:15; 2000mA; Cycles=123/1000; Location=0;";
       const result = parsePmsetRawlogLine(line);
 
       expect(result).toEqual({
@@ -50,7 +50,7 @@ describe("MacOS Power Agent", () => {
 
     test("should parse battery line with charged status", () => {
       const line =
-        " AC Power; Charged; 100%; Cap=100: FCC=100; Design=8694; Time=0:00; 0mA; Cycles=567/1000; Location=0;";
+        " AC; Charged; 100%; Cap=100: FCC=100; Design=8694; Time=0:00; 0mA; Cycles=567/1000; Location=0;";
       const result = parsePmsetRawlogLine(line);
 
       expect(result).toEqual({
@@ -105,7 +105,7 @@ describe("MacOS Power Agent", () => {
 
     test("should handle zero cycle count", () => {
       const line =
-        " AC Power; Charging; 80%; Cap=80: FCC=100; Design=8694; Time=1:00; 1000mA; Cycles=0/1000; Location=0;";
+        " AC; Charging; 80%; Cap=80: FCC=100; Design=8694; Time=1:00; 1000mA; Cycles=0/1000; Location=0;";
       const result = parsePmsetRawlogLine(line);
 
       expect(result?.cycleCount).toBe(0);
@@ -117,6 +117,21 @@ describe("MacOS Power Agent", () => {
       const result = parsePmsetRawlogLine(line);
 
       expect(result?.cycleCount).toBe(999);
+    });
+
+    test("should parse real charging example", () => {
+      const line =
+        " AC; Charging; 43%; Cap=43: FCC=100; Design=8694; Time=2:01; 4794mA; Cycles=490/1000; Location=0;";
+      const result = parsePmsetRawlogLine(line);
+
+      expect(result).toEqual({
+        isCharging: true,
+        batteryLevel: 43,
+        timeRemaining: 121, // 2 hours 1 minute = 121 minutes
+        powerSource: "AC",
+        cycleCount: 490,
+        condition: "Good",
+      });
     });
   });
 
