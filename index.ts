@@ -135,9 +135,15 @@ class MacOSPowerAgent {
 
   private async getUptimeMinutes(): Promise<number> {
     try {
-      const output = await this.executeCommand("uptime -s");
-      // uptime -s returns boot time, e.g. '2024-07-31 08:15:23'
-      const bootTime = new Date(output.trim());
+      const output = await this.executeCommand("sysctl kern.boottime");
+      // sysctl kern.boottime returns something like: kern.boottime: { sec = 1722409523, usec = 0 } Thu Aug  1 15:12:03 2024
+      const secMatch = output.match(/sec = (\d+)/);
+      if (!secMatch || !secMatch[1]) {
+        throw new Error("Could not parse boot time from sysctl output");
+      }
+
+      const bootTimeSeconds = parseInt(secMatch[1]);
+      const bootTime = new Date(bootTimeSeconds * 1000);
       const now = new Date();
       const diffMs = now.getTime() - bootTime.getTime();
       return Math.floor(diffMs / 60000); // minutes
