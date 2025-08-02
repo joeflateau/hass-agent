@@ -5,6 +5,9 @@
 
 set -e
 
+# Redirect all output to both console and log file
+exec > >(tee -a /tmp/hass-agent.update.log) 2>&1
+
 REPO="__GITHUB_REPOSITORY__"  # Will be replaced during release
 RELEASE_VERSION="__VERSION__"  # Will be replaced during release
 

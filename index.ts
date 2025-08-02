@@ -197,6 +197,10 @@ class MacOSPowerAgent {
           reject(new Error(`Command failed with code ${code}: ${error}`));
         }
       });
+
+      child.on("error", (err) => {
+        reject(err);
+      });
     });
   }
 
@@ -441,12 +445,14 @@ class MacOSPowerAgent {
       try {
         logger.info("Checking for updates...");
 
-        // Execute the install script directly via curl | bash with current version
+        // Execute the install script with detached process so it can outlive this process
+        // The install script may need to kill this process to update the binary
         await this.executeCommand(
           `curl -fsSL "${this.config.INSTALL_SCRIPT_URL}" | bash`,
           {
             env: { ...process.env, INSTALLED_VERSION: this.config.VERSION },
-            stdio: "inherit",
+            detached: true, // Allow the process to run independently
+            stdio: "ignore", // Disconnect stdio so child can outlive parent
           }
         );
       } catch (error) {
