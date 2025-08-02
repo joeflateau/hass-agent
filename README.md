@@ -284,11 +284,56 @@ Increase the `UPDATE_INTERVAL` to reduce system command frequency.
 
 ## Development
 
+### Setup
+
+1. **Clone the repository:**
+
+   ```bash
+   git clone https://github.com/joeflateau/hass-agent.git
+   cd hass-agent
+   ```
+
+2. **Install dependencies:**
+
+   ```bash
+   bun install
+   ```
+
+3. **Run in development mode:**
+   ```bash
+   bun run dev
+   ```
+
+### Testing
+
+The project includes comprehensive tests for the core functionality:
+
+```bash
+# Run all tests
+bun test
+
+# Run tests in watch mode
+bun test --watch
+
+# Run tests with coverage
+bun test --coverage
+```
+
+**Test Coverage:**
+
+- ✅ **Battery parsing logic** - Tests parsing of `pmset -g rawlog` output
+- ✅ **Environment validation** - Tests configuration validation
+- ✅ **Uptime calculation** - Tests system uptime parsing
+- ✅ **MQTT discovery configuration** - Tests Home Assistant device configs
+- ✅ **Data formatting** - Tests sensor data formatting
+
 ### Scripts
 
 - `bun run dev` - Run in development mode
 - `bun run build` - Build single file executable
 - `bun run start` - Run built executable
+- `bun test` - Run test suite
+- `bun test --watch` - Run tests in watch mode
 
 ### Project Structure
 

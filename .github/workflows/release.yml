@@ -41,6 +41,9 @@ jobs:
       - name: Install dependencies
         run: bun install
 
+      - name: Run tests
+        run: bun test
+
       - name: Build executable for Apple Silicon (arm64)
         run: |
           bun build --compile --minify --sourcemap ./index.ts --outfile hass-agent-arm64 --target bun-darwin-arm64 --define VERSION=\"${{ steps.version.outputs.VERSION }}\"

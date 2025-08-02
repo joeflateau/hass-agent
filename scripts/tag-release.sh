@@ -51,6 +51,14 @@ if [ -n "$(git status --porcelain)" ]; then
   exit 1
 fi
 
+# Run tests before creating the release
+echo "Running tests..."
+if ! bun test; then
+  echo "Tests failed. Cannot create release."
+  exit 1
+fi
+echo "All tests passed!"
+
 # Push any local commits to origin
 echo "Pushing any local commits..."
 git push origin HEAD

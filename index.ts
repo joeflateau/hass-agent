@@ -1,10 +1,12 @@
 #!/usr/bin/env bun
 
-import { spawn, type SpawnOptions } from "child_process";
+import { spawn, type ChildProcess, type SpawnOptions } from "child_process";
 import * as mqtt from "mqtt";
 import { hostname } from "os";
+import * as readline from "readline";
 import winston from "winston";
 import { z } from "zod";
+import { parsePmsetRawlogLine, type BatteryInfo } from "./battery-parser.ts";
 
 // Configure Winston logger with timestamps
 const logger = winston.createLogger({
@@ -89,26 +91,13 @@ const DISCOVERY_PREFIX = "homeassistant";
 // Build-time version constant (will be replaced by bun build)
 declare const VERSION: string;
 
-interface BatteryInfo {
-  isCharging: boolean;
-  batteryLevel: number;
-  timeRemaining: number;
-  powerSource: string;
-  cycleCount: number;
-  condition: string;
-}
-
-interface PowerInfo {
-  acPower: boolean;
-  batteryPower: boolean;
-  upsConnected: boolean;
-}
-
 class MacOSPowerAgent {
   private config: z.infer<typeof envSchema>;
   private client: mqtt.MqttClient;
   private deviceId: string;
   private upgradeCheckTimer?: NodeJS.Timeout;
+  private pmsetProcess?: ChildProcess;
+  private periodicTimer?: NodeJS.Timeout;
 
   constructor(config: z.infer<typeof envSchema>) {
     this.config = config;
@@ -210,75 +199,92 @@ class MacOSPowerAgent {
     });
   }
 
-  private async getBatteryInfo(): Promise<BatteryInfo | null> {
-    try {
-      const output = await this.executeCommand("pmset -g batt");
-      const batteryMatch = output.match(/(\d+)%;\s*(.*?);\s*(.*?)\s*present/);
-
-      if (
-        !batteryMatch ||
-        !batteryMatch[1] ||
-        !batteryMatch[2] ||
-        !batteryMatch[3]
-      ) {
-        return null; // No battery present
-      }
-
-      const batteryLevel = parseInt(batteryMatch[1]);
-      const chargingState = batteryMatch[2];
-      const timeInfo = batteryMatch[3];
-
-      // Get additional battery info
-      const systemProfiler = await this.executeCommand(
-        'system_profiler SPPowerDataType | grep -E "(Cycle Count|Condition)"'
-      );
-      const cycleMatch = systemProfiler.match(/Cycle Count:\s*(\d+)/);
-      const conditionMatch = systemProfiler.match(/Condition:\s*(.+)/);
-
-      // Parse time remaining
-      let timeRemaining = -1;
-      if (timeInfo && timeInfo.includes(":")) {
-        const timeParts = timeInfo.split(":");
-        if (timeParts[0] && timeParts[1]) {
-          timeRemaining = parseInt(timeParts[0]) * 60 + parseInt(timeParts[1]);
-        }
-      }
-
-      return {
-        isCharging:
-          (!chargingState.includes("discharging") &&
-            chargingState.includes("charging")) ||
-          chargingState.includes("charged"),
-        batteryLevel,
-        timeRemaining,
-        powerSource: chargingState.includes("AC Power") ? "AC" : "Battery",
-        cycleCount: cycleMatch && cycleMatch[1] ? parseInt(cycleMatch[1]) : 0,
-        condition:
-          conditionMatch && conditionMatch[1]
-            ? conditionMatch[1].trim()
-            : "Unknown",
-      };
-    } catch (error) {
-      logger.error(`Error getting battery info: ${error}`);
-      return null;
-    }
+  private parsePmsetRawlogLine(line: string): BatteryInfo | null {
+    return parsePmsetRawlogLine(line);
   }
 
-  private async getPowerInfo(): Promise<PowerInfo> {
+  private startPmsetRawlogMonitoring(): void {
+    logger.info("Starting pmset rawlog monitoring...");
+
+    this.pmsetProcess = spawn("pmset", ["-g", "rawlog"]);
+
+    if (this.pmsetProcess.stdout) {
+      const rl = readline.createInterface({
+        input: this.pmsetProcess.stdout,
+        crlfDelay: Infinity,
+      });
+
+      rl.on("line", (line: string) => {
+        const trimmedLine = line.trim();
+        if (!trimmedLine) return;
+
+        // Look for battery status lines (contain semicolons and percentage)
+        if (trimmedLine.includes(";") && trimmedLine.includes("%")) {
+          const batteryInfo = this.parsePmsetRawlogLine(trimmedLine);
+          if (batteryInfo) {
+            logger.debug(
+              `Battery update: ${batteryInfo.batteryLevel}%, Charging: ${
+                batteryInfo.isCharging
+              }, AC: ${batteryInfo.powerSource === "AC"}`
+            );
+            this.publishBatteryData(batteryInfo);
+          }
+        }
+      });
+
+      rl.on("close", () => {
+        logger.warn("pmset rawlog readline interface closed");
+      });
+    }
+
+    this.pmsetProcess.stderr?.on("data", (data: Buffer) => {
+      logger.error(`pmset rawlog stderr: ${data.toString()}`);
+    });
+
+    this.pmsetProcess.on("close", (code: number) => {
+      logger.warn(`pmset rawlog process closed with code ${code}`);
+      // Restart the process after a delay
+      setTimeout(() => {
+        if (!this.pmsetProcess?.killed) {
+          this.startPmsetRawlogMonitoring();
+        }
+      }, 5000);
+    });
+
+    this.pmsetProcess.on("error", (error: Error) => {
+      logger.error(`pmset rawlog process error: ${error}`);
+    });
+  }
+
+  private async publishBatteryData(batteryInfo: BatteryInfo): Promise<void> {
     try {
-      const output = await this.executeCommand("pmset -g ps");
-      return {
-        acPower: output.includes("AC Power"),
-        batteryPower: output.includes("Battery Power"),
-        upsConnected: output.includes("UPS"),
-      };
+      // Battery Level
+      this.client.publish(
+        `${DISCOVERY_PREFIX}/sensor/${this.deviceId}/battery_level/state`,
+        JSON.stringify({ battery_level: batteryInfo.batteryLevel })
+      );
+
+      // Battery Charging
+      this.client.publish(
+        `${DISCOVERY_PREFIX}/binary_sensor/${this.deviceId}/battery_charging/state`,
+        JSON.stringify({ is_charging: batteryInfo.isCharging ? "ON" : "OFF" })
+      );
+
+      // Time Remaining
+      this.client.publish(
+        `${DISCOVERY_PREFIX}/sensor/${this.deviceId}/time_remaining/state`,
+        JSON.stringify({ time_remaining: batteryInfo.timeRemaining })
+      );
+
+      // AC Power (derived from power source)
+      this.client.publish(
+        `${DISCOVERY_PREFIX}/binary_sensor/${this.deviceId}/ac_power/state`,
+        JSON.stringify({
+          ac_power: batteryInfo.powerSource === "AC" ? "ON" : "OFF",
+        })
+      );
     } catch (error) {
-      logger.error(`Error getting power info: ${error}`);
-      return {
-        acPower: false,
-        batteryPower: false,
-        upsConnected: false,
-      };
+      logger.error(`Error publishing battery data: ${error}`);
     }
   }
 
@@ -379,40 +385,8 @@ class MacOSPowerAgent {
 
   private async publishSensorData(): Promise<void> {
     try {
-      const batteryInfo = await this.getBatteryInfo();
-      const powerInfo = await this.getPowerInfo();
-
+      // Only publish uptime periodically since battery data comes from rawlog
       const uptimeMinutes = await this.getUptimeMinutes();
-
-      if (batteryInfo) {
-        // Battery Level
-        this.client.publish(
-          `${DISCOVERY_PREFIX}/sensor/${this.deviceId}/battery_level/state`,
-          JSON.stringify({ battery_level: batteryInfo.batteryLevel })
-        );
-
-        // Battery Charging
-        this.client.publish(
-          `${DISCOVERY_PREFIX}/binary_sensor/${this.deviceId}/battery_charging/state`,
-          JSON.stringify({ is_charging: batteryInfo.isCharging ? "ON" : "OFF" })
-        );
-
-        // Time Remaining
-        this.client.publish(
-          `${DISCOVERY_PREFIX}/sensor/${this.deviceId}/time_remaining/state`,
-          JSON.stringify({ time_remaining: batteryInfo.timeRemaining })
-        );
-
-        logger.debug(
-          `Battery: ${batteryInfo.batteryLevel}%, Charging: ${batteryInfo.isCharging}, Time: ${batteryInfo.timeRemaining}min`
-        );
-      }
-
-      // AC Power
-      this.client.publish(
-        `${DISCOVERY_PREFIX}/binary_sensor/${this.deviceId}/ac_power/state`,
-        JSON.stringify({ ac_power: powerInfo.acPower ? "ON" : "OFF" })
-      );
 
       // Uptime
       this.client.publish(
@@ -420,20 +394,21 @@ class MacOSPowerAgent {
         JSON.stringify({ uptime: uptimeMinutes })
       );
 
-      logger.debug(
-        `AC Power: ${powerInfo.acPower}, Uptime: ${uptimeMinutes}min`
-      );
+      logger.debug(`Uptime: ${uptimeMinutes}min`);
     } catch (error) {
       logger.error(`Error publishing sensor data: ${error}`);
     }
   }
 
   private startMonitoring(): void {
-    // Initial publish
+    // Start pmset rawlog monitoring for real-time battery updates
+    this.startPmsetRawlogMonitoring();
+
+    // Initial uptime publish
     this.publishSensorData();
 
-    // Set up periodic updates
-    setInterval(() => {
+    // Set up periodic updates for uptime (less frequent since it's not critical)
+    this.periodicTimer = setInterval(() => {
       this.publishSensorData();
     }, this.config.UPDATE_INTERVAL);
 
@@ -443,7 +418,7 @@ class MacOSPowerAgent {
     }
 
     logger.info(
-      `Started monitoring with ${this.config.UPDATE_INTERVAL}ms interval`
+      `Started monitoring with real-time battery updates and ${this.config.UPDATE_INTERVAL}ms uptime updates`
     );
   }
 
@@ -485,10 +460,21 @@ class MacOSPowerAgent {
   public async shutdown(): Promise<void> {
     logger.info("Shutting down...");
 
-    // Clear upgrade timer if it exists
+    // Clear timers if they exist
     if (this.upgradeCheckTimer) {
       clearInterval(this.upgradeCheckTimer);
       this.upgradeCheckTimer = undefined;
+    }
+
+    if (this.periodicTimer) {
+      clearInterval(this.periodicTimer);
+      this.periodicTimer = undefined;
+    }
+
+    // Kill pmset rawlog process
+    if (this.pmsetProcess && !this.pmsetProcess.killed) {
+      this.pmsetProcess.kill("SIGTERM");
+      this.pmsetProcess = undefined;
     }
 
     return new Promise((resolve) => {
