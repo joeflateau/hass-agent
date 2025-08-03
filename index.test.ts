@@ -371,7 +371,8 @@ describe("MacOS Power Agent", () => {
     });
 
     afterEach(() => {
-      mockExecuteCommand.mockRestore?.();
+      mockExecuteCommand?.mockClear?.();
+      mockExecuteCommand?.mockRestore?.();
     });
 
     test("should detect external display status", async () => {
@@ -396,9 +397,18 @@ describe("MacOS Power Agent", () => {
       const mockAssertionsOutput =
         "PreventUserIdleDisplaySleep    0\nInternalPreventDisplaySleep    0";
 
-      mockExecuteCommand
-        .mockImplementationOnce(() => Promise.resolve(mockDisplayOutput))
-        .mockImplementationOnce(() => Promise.resolve(mockAssertionsOutput));
+      mockExecuteCommand.mockImplementation(async (command: string) => {
+        switch (command) {
+          case "system_profiler SPDisplaysDataType -json":
+            return mockDisplayOutput;
+          case "pmset -g assertions":
+            return mockAssertionsOutput;
+          case "pmset -g ps":
+            return "";
+          default:
+            throw new Error(`Unexpected command: ${command}`);
+        }
+      });
 
       const result = await agent.getDisplayStatus();
 
@@ -408,15 +418,12 @@ describe("MacOS Power Agent", () => {
         builtinDisplayOnline: true,
       });
 
-      expect(mockExecuteCommand).toHaveBeenCalledTimes(2);
-      expect(mockExecuteCommand).toHaveBeenNthCalledWith(
-        1,
+      expect(mockExecuteCommand).toHaveBeenCalledTimes(3);
+      expect(mockExecuteCommand).toHaveBeenCalledWith(
         "system_profiler SPDisplaysDataType -json"
       );
-      expect(mockExecuteCommand).toHaveBeenNthCalledWith(
-        2,
-        "pmset -g assertions"
-      );
+      expect(mockExecuteCommand).toHaveBeenCalledWith("pmset -g assertions");
+      expect(mockExecuteCommand).toHaveBeenCalledWith("pmset -g ps");
     });
 
     test("should detect built-in display on status", async () => {
@@ -436,9 +443,18 @@ describe("MacOS Power Agent", () => {
 
       const mockAssertionsOutput = "PreventUserIdleDisplaySleep    1";
 
-      mockExecuteCommand
-        .mockImplementationOnce(() => Promise.resolve(mockDisplayOutput))
-        .mockImplementationOnce(() => Promise.resolve(mockAssertionsOutput));
+      mockExecuteCommand.mockImplementation(async (command: string) => {
+        switch (command) {
+          case "system_profiler SPDisplaysDataType -json":
+            return mockDisplayOutput;
+          case "pmset -g assertions":
+            return mockAssertionsOutput;
+          case "pmset -g ps":
+            return "";
+          default:
+            throw new Error(`Unexpected command: ${command}`);
+        }
+      });
 
       const result = await agent.getDisplayStatus();
 
@@ -467,9 +483,18 @@ describe("MacOS Power Agent", () => {
       const mockAssertionsOutput =
         "PreventUserIdleDisplaySleep    0\nInternalPreventDisplaySleep    0";
 
-      mockExecuteCommand
-        .mockImplementationOnce(() => Promise.resolve(mockDisplayOutput))
-        .mockImplementationOnce(() => Promise.resolve(mockAssertionsOutput));
+      mockExecuteCommand.mockImplementation(async (command: string) => {
+        switch (command) {
+          case "system_profiler SPDisplaysDataType -json":
+            return mockDisplayOutput;
+          case "pmset -g assertions":
+            return mockAssertionsOutput;
+          case "pmset -g ps":
+            return "";
+          default:
+            throw new Error(`Unexpected command: ${command}`);
+        }
+      });
 
       const result = await agent.getDisplayStatus();
 
@@ -505,9 +530,18 @@ describe("MacOS Power Agent", () => {
 
       const mockAssertionsOutput = "PreventUserIdleDisplaySleep    0";
 
-      mockExecuteCommand
-        .mockImplementationOnce(() => Promise.resolve(mockDisplayOutput))
-        .mockImplementationOnce(() => Promise.resolve(mockAssertionsOutput));
+      mockExecuteCommand.mockImplementation(async (command: string) => {
+        switch (command) {
+          case "system_profiler SPDisplaysDataType -json":
+            return mockDisplayOutput;
+          case "pmset -g assertions":
+            return mockAssertionsOutput;
+          case "pmset -g ps":
+            return "";
+          default:
+            throw new Error(`Unexpected command: ${command}`);
+        }
+      });
 
       const result = await agent.getDisplayStatus();
 
@@ -526,9 +560,18 @@ describe("MacOS Power Agent", () => {
 
       const mockAssertionsOutput = "PreventUserIdleDisplaySleep    0";
 
-      mockExecuteCommand
-        .mockImplementationOnce(() => Promise.resolve(mockDisplayOutput))
-        .mockImplementationOnce(() => Promise.resolve(mockAssertionsOutput));
+      mockExecuteCommand.mockImplementation(async (command: string) => {
+        switch (command) {
+          case "system_profiler SPDisplaysDataType -json":
+            return mockDisplayOutput;
+          case "pmset -g assertions":
+            return mockAssertionsOutput;
+          case "pmset -g ps":
+            return "";
+          default:
+            throw new Error(`Unexpected command: ${command}`);
+        }
+      });
 
       const result = await agent.getDisplayStatus();
 
@@ -556,9 +599,18 @@ describe("MacOS Power Agent", () => {
 
       const mockAssertionsOutput = "InternalPreventDisplaySleep    1";
 
-      mockExecuteCommand
-        .mockImplementationOnce(() => Promise.resolve(mockDisplayOutput))
-        .mockImplementationOnce(() => Promise.resolve(mockAssertionsOutput));
+      mockExecuteCommand.mockImplementation(async (command: string) => {
+        switch (command) {
+          case "system_profiler SPDisplaysDataType -json":
+            return mockDisplayOutput;
+          case "pmset -g assertions":
+            return mockAssertionsOutput;
+          case "pmset -g ps":
+            return "";
+          default:
+            throw new Error(`Unexpected command: ${command}`);
+        }
+      });
 
       const result = await agent.getDisplayStatus();
 
@@ -590,9 +642,18 @@ describe("MacOS Power Agent", () => {
 
       const mockAssertionsOutput = "PreventUserIdleDisplaySleep    1";
 
-      mockExecuteCommand
-        .mockImplementationOnce(() => Promise.resolve(mockDisplayOutput))
-        .mockImplementationOnce(() => Promise.resolve(mockAssertionsOutput));
+      mockExecuteCommand.mockImplementation(async (command: string) => {
+        switch (command) {
+          case "system_profiler SPDisplaysDataType -json":
+            return mockDisplayOutput;
+          case "pmset -g assertions":
+            return mockAssertionsOutput;
+          case "pmset -g ps":
+            return "";
+          default:
+            throw new Error(`Unexpected command: ${command}`);
+        }
+      });
 
       const result = await agent.getDisplayStatus();
 
@@ -604,10 +665,15 @@ describe("MacOS Power Agent", () => {
     });
 
     test("should handle command execution errors", async () => {
-      // Mock executeCommand to throw an error
-      mockExecuteCommand.mockImplementationOnce(() =>
-        Promise.reject(new Error("Command failed"))
-      );
+      // Mock executeCommand to throw an error for the first command
+      mockExecuteCommand.mockImplementation(async (command: string) => {
+        switch (command) {
+          case "system_profiler SPDisplaysDataType -json":
+            throw new Error("Command failed");
+          default:
+            return "";
+        }
+      });
 
       const result = await agent.getDisplayStatus();
 
@@ -622,9 +688,14 @@ describe("MacOS Power Agent", () => {
 
     test("should handle invalid JSON from system_profiler", async () => {
       // Mock system_profiler to return invalid JSON
-      mockExecuteCommand.mockImplementationOnce(() =>
-        Promise.resolve("invalid json")
-      );
+      mockExecuteCommand.mockImplementation(async (command: string) => {
+        switch (command) {
+          case "system_profiler SPDisplaysDataType -json":
+            return "invalid json";
+          default:
+            return "";
+        }
+      });
 
       const result = await agent.getDisplayStatus();
 
@@ -649,9 +720,18 @@ describe("MacOS Power Agent", () => {
 
       const mockAssertionsOutput = "PreventUserIdleDisplaySleep    0";
 
-      mockExecuteCommand
-        .mockImplementationOnce(() => Promise.resolve(mockDisplayOutput))
-        .mockImplementationOnce(() => Promise.resolve(mockAssertionsOutput));
+      mockExecuteCommand.mockImplementation(async (command: string) => {
+        switch (command) {
+          case "system_profiler SPDisplaysDataType -json":
+            return mockDisplayOutput;
+          case "pmset -g assertions":
+            return mockAssertionsOutput;
+          case "pmset -g ps":
+            return "";
+          default:
+            throw new Error(`Unexpected command: ${command}`);
+        }
+      });
 
       const result = await agent.getDisplayStatus();
 
@@ -684,9 +764,18 @@ describe("MacOS Power Agent", () => {
       // Even if display sleep is not prevented, external display should take priority
       const mockAssertionsOutput = "PreventUserIdleDisplaySleep    0";
 
-      mockExecuteCommand
-        .mockImplementationOnce(() => Promise.resolve(mockDisplayOutput))
-        .mockImplementationOnce(() => Promise.resolve(mockAssertionsOutput));
+      mockExecuteCommand.mockImplementation(async (command: string) => {
+        switch (command) {
+          case "system_profiler SPDisplaysDataType -json":
+            return mockDisplayOutput;
+          case "pmset -g assertions":
+            return mockAssertionsOutput;
+          case "pmset -g ps":
+            return "";
+          default:
+            throw new Error(`Unexpected command: ${command}`);
+        }
+      });
 
       const result = await agent.getDisplayStatus();
 
