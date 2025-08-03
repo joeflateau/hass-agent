@@ -1,5 +1,6 @@
-import { describe, expect, test } from "bun:test";
+import { afterEach, beforeEach, describe, expect, mock, test } from "bun:test";
 import { parsePmsetRawlogLine } from "./battery-parser.ts";
+import { MacOSPowerAgent } from "./index.ts";
 
 describe("MacOS Power Agent", () => {
   describe("parsePmsetRawlogLine", () => {
@@ -342,6 +343,358 @@ describe("MacOS Power Agent", () => {
 
       expect(formatted.is_charging).toEqual({ is_charging: "OFF" });
       expect(formatted.ac_power).toEqual({ ac_power: "OFF" });
+    });
+  });
+
+  describe("Display Status Detection", () => {
+    let agent: MacOSPowerAgent;
+    let mockExecuteCommand: any;
+
+    beforeEach(() => {
+      // Create agent with minimal config
+      const config = {
+        MQTT_BROKER: "mqtt://localhost:1883",
+        DEVICE_ID: "test-device",
+        DEVICE_NAME: "Test Device",
+        UPDATE_INTERVAL: 30000,
+        AUTO_UPGRADE: false,
+        UPGRADE_CHECK_INTERVAL: 3 * 60 * 60 * 1000,
+        INSTALL_SCRIPT_URL: "https://example.com/install.sh",
+        VERSION: "test-version",
+      };
+
+      agent = new MacOSPowerAgent(config);
+
+      // Mock the executeCommand method
+      mockExecuteCommand = mock();
+      (agent as any).executeCommand = mockExecuteCommand;
+    });
+
+    afterEach(() => {
+      mockExecuteCommand.mockRestore?.();
+    });
+
+    test("should detect external display status", async () => {
+      // Mock system_profiler output with external display
+      const mockDisplayOutput = JSON.stringify({
+        SPDisplaysDataType: [
+          {
+            spdisplays_ndrvs: [
+              {
+                spdisplays_connection_type: "spdisplays_internal",
+                spdisplays_online: "spdisplays_yes",
+              },
+              {
+                spdisplays_connection_type: "spdisplays_external",
+                spdisplays_online: "spdisplays_yes",
+              },
+            ],
+          },
+        ],
+      });
+
+      const mockAssertionsOutput =
+        "PreventUserIdleDisplaySleep    0\nInternalPreventDisplaySleep    0";
+
+      mockExecuteCommand
+        .mockImplementationOnce(() => Promise.resolve(mockDisplayOutput))
+        .mockImplementationOnce(() => Promise.resolve(mockAssertionsOutput));
+
+      const result = await agent.getDisplayStatus();
+
+      expect(result).toEqual({
+        status: "external",
+        externalDisplayCount: 1,
+        builtinDisplayOnline: true,
+      });
+
+      expect(mockExecuteCommand).toHaveBeenCalledTimes(2);
+      expect(mockExecuteCommand).toHaveBeenNthCalledWith(
+        1,
+        "system_profiler SPDisplaysDataType -json"
+      );
+      expect(mockExecuteCommand).toHaveBeenNthCalledWith(
+        2,
+        "pmset -g assertions"
+      );
+    });
+
+    test("should detect built-in display on status", async () => {
+      // Mock system_profiler output with only built-in display
+      const mockDisplayOutput = JSON.stringify({
+        SPDisplaysDataType: [
+          {
+            spdisplays_ndrvs: [
+              {
+                spdisplays_connection_type: "spdisplays_internal",
+                spdisplays_online: "spdisplays_yes",
+              },
+            ],
+          },
+        ],
+      });
+
+      const mockAssertionsOutput = "PreventUserIdleDisplaySleep    1";
+
+      mockExecuteCommand
+        .mockImplementationOnce(() => Promise.resolve(mockDisplayOutput))
+        .mockImplementationOnce(() => Promise.resolve(mockAssertionsOutput));
+
+      const result = await agent.getDisplayStatus();
+
+      expect(result).toEqual({
+        status: "on",
+        externalDisplayCount: 0,
+        builtinDisplayOnline: true,
+      });
+    });
+
+    test("should detect display off status", async () => {
+      // Mock system_profiler output with built-in display online but no sleep prevention
+      const mockDisplayOutput = JSON.stringify({
+        SPDisplaysDataType: [
+          {
+            spdisplays_ndrvs: [
+              {
+                spdisplays_connection_type: "spdisplays_internal",
+                spdisplays_online: "spdisplays_yes",
+              },
+            ],
+          },
+        ],
+      });
+
+      const mockAssertionsOutput =
+        "PreventUserIdleDisplaySleep    0\nInternalPreventDisplaySleep    0";
+
+      mockExecuteCommand
+        .mockImplementationOnce(() => Promise.resolve(mockDisplayOutput))
+        .mockImplementationOnce(() => Promise.resolve(mockAssertionsOutput));
+
+      const result = await agent.getDisplayStatus();
+
+      expect(result).toEqual({
+        status: "off",
+        externalDisplayCount: 0,
+        builtinDisplayOnline: true,
+      });
+    });
+
+    test("should handle multiple external displays", async () => {
+      // Mock system_profiler output with multiple external displays
+      const mockDisplayOutput = JSON.stringify({
+        SPDisplaysDataType: [
+          {
+            spdisplays_ndrvs: [
+              {
+                spdisplays_connection_type: "spdisplays_internal",
+                spdisplays_online: "spdisplays_no",
+              },
+              {
+                spdisplays_connection_type: "spdisplays_external",
+                spdisplays_online: "spdisplays_yes",
+              },
+              {
+                spdisplays_connection_type: "spdisplays_external",
+                spdisplays_online: "spdisplays_yes",
+              },
+            ],
+          },
+        ],
+      });
+
+      const mockAssertionsOutput = "PreventUserIdleDisplaySleep    0";
+
+      mockExecuteCommand
+        .mockImplementationOnce(() => Promise.resolve(mockDisplayOutput))
+        .mockImplementationOnce(() => Promise.resolve(mockAssertionsOutput));
+
+      const result = await agent.getDisplayStatus();
+
+      expect(result).toEqual({
+        status: "external",
+        externalDisplayCount: 2,
+        builtinDisplayOnline: false,
+      });
+    });
+
+    test("should handle empty display data", async () => {
+      // Mock system_profiler output with no displays
+      const mockDisplayOutput = JSON.stringify({
+        SPDisplaysDataType: [],
+      });
+
+      const mockAssertionsOutput = "PreventUserIdleDisplaySleep    0";
+
+      mockExecuteCommand
+        .mockImplementationOnce(() => Promise.resolve(mockDisplayOutput))
+        .mockImplementationOnce(() => Promise.resolve(mockAssertionsOutput));
+
+      const result = await agent.getDisplayStatus();
+
+      expect(result).toEqual({
+        status: "off",
+        externalDisplayCount: 0,
+        builtinDisplayOnline: false,
+      });
+    });
+
+    test("should handle InternalPreventDisplaySleep assertion", async () => {
+      // Mock system_profiler output with built-in display
+      const mockDisplayOutput = JSON.stringify({
+        SPDisplaysDataType: [
+          {
+            spdisplays_ndrvs: [
+              {
+                spdisplays_connection_type: "spdisplays_internal",
+                spdisplays_online: "spdisplays_yes",
+              },
+            ],
+          },
+        ],
+      });
+
+      const mockAssertionsOutput = "InternalPreventDisplaySleep    1";
+
+      mockExecuteCommand
+        .mockImplementationOnce(() => Promise.resolve(mockDisplayOutput))
+        .mockImplementationOnce(() => Promise.resolve(mockAssertionsOutput));
+
+      const result = await agent.getDisplayStatus();
+
+      expect(result).toEqual({
+        status: "on",
+        externalDisplayCount: 0,
+        builtinDisplayOnline: true,
+      });
+    });
+
+    test("should handle offline external displays", async () => {
+      // Mock system_profiler output with offline external display
+      const mockDisplayOutput = JSON.stringify({
+        SPDisplaysDataType: [
+          {
+            spdisplays_ndrvs: [
+              {
+                spdisplays_connection_type: "spdisplays_internal",
+                spdisplays_online: "spdisplays_yes",
+              },
+              {
+                spdisplays_connection_type: "spdisplays_external",
+                spdisplays_online: "spdisplays_no",
+              },
+            ],
+          },
+        ],
+      });
+
+      const mockAssertionsOutput = "PreventUserIdleDisplaySleep    1";
+
+      mockExecuteCommand
+        .mockImplementationOnce(() => Promise.resolve(mockDisplayOutput))
+        .mockImplementationOnce(() => Promise.resolve(mockAssertionsOutput));
+
+      const result = await agent.getDisplayStatus();
+
+      expect(result).toEqual({
+        status: "on",
+        externalDisplayCount: 0,
+        builtinDisplayOnline: true,
+      });
+    });
+
+    test("should handle command execution errors", async () => {
+      // Mock executeCommand to throw an error
+      mockExecuteCommand.mockImplementationOnce(() =>
+        Promise.reject(new Error("Command failed"))
+      );
+
+      const result = await agent.getDisplayStatus();
+
+      expect(result).toEqual({
+        status: "off",
+        externalDisplayCount: 0,
+        builtinDisplayOnline: false,
+      });
+
+      expect(mockExecuteCommand).toHaveBeenCalledTimes(1);
+    });
+
+    test("should handle invalid JSON from system_profiler", async () => {
+      // Mock system_profiler to return invalid JSON
+      mockExecuteCommand.mockImplementationOnce(() =>
+        Promise.resolve("invalid json")
+      );
+
+      const result = await agent.getDisplayStatus();
+
+      expect(result).toEqual({
+        status: "off",
+        externalDisplayCount: 0,
+        builtinDisplayOnline: false,
+      });
+
+      expect(mockExecuteCommand).toHaveBeenCalledTimes(1);
+    });
+
+    test("should handle missing spdisplays_ndrvs data", async () => {
+      // Mock system_profiler output with missing spdisplays_ndrvs
+      const mockDisplayOutput = JSON.stringify({
+        SPDisplaysDataType: [
+          {
+            // Missing spdisplays_ndrvs
+          },
+        ],
+      });
+
+      const mockAssertionsOutput = "PreventUserIdleDisplaySleep    0";
+
+      mockExecuteCommand
+        .mockImplementationOnce(() => Promise.resolve(mockDisplayOutput))
+        .mockImplementationOnce(() => Promise.resolve(mockAssertionsOutput));
+
+      const result = await agent.getDisplayStatus();
+
+      expect(result).toEqual({
+        status: "off",
+        externalDisplayCount: 0,
+        builtinDisplayOnline: false,
+      });
+    });
+
+    test("should prioritize external displays over built-in display status", async () => {
+      // Mock system_profiler output with both built-in and external displays
+      const mockDisplayOutput = JSON.stringify({
+        SPDisplaysDataType: [
+          {
+            spdisplays_ndrvs: [
+              {
+                spdisplays_connection_type: "spdisplays_internal",
+                spdisplays_online: "spdisplays_yes",
+              },
+              {
+                spdisplays_connection_type: "spdisplays_external",
+                spdisplays_online: "spdisplays_yes",
+              },
+            ],
+          },
+        ],
+      });
+
+      // Even if display sleep is not prevented, external display should take priority
+      const mockAssertionsOutput = "PreventUserIdleDisplaySleep    0";
+
+      mockExecuteCommand
+        .mockImplementationOnce(() => Promise.resolve(mockDisplayOutput))
+        .mockImplementationOnce(() => Promise.resolve(mockAssertionsOutput));
+
+      const result = await agent.getDisplayStatus();
+
+      expect(result).toEqual({
+        status: "external",
+        externalDisplayCount: 1,
+        builtinDisplayOnline: true,
+      });
     });
   });
 });

@@ -4,9 +4,16 @@ import { spawn, type ChildProcess, type SpawnOptions } from "child_process";
 import * as mqtt from "mqtt";
 import { hostname } from "os";
 import * as readline from "readline";
-import winston from "winston";
+import * as winston from "winston";
 import { z } from "zod";
 import { parsePmsetRawlogLine, type BatteryInfo } from "./battery-parser.ts";
+
+// Display status interface
+interface DisplayInfo {
+  status: "on" | "off" | "external";
+  externalDisplayCount: number;
+  builtinDisplayOnline: boolean;
+}
 
 // Configure Winston logger with timestamps
 const logger = winston.createLogger({
@@ -135,6 +142,71 @@ class MacOSPowerAgent {
         });
       }
     });
+  }
+
+  public async getDisplayStatus(): Promise<DisplayInfo> {
+    try {
+      // Check external displays using system_profiler
+      const displayOutput = await this.executeCommand(
+        "system_profiler SPDisplaysDataType -json"
+      );
+      const displayData = JSON.parse(displayOutput);
+
+      let externalDisplayCount = 0;
+      let builtinDisplayOnline = false;
+
+      if (
+        displayData.SPDisplaysDataType &&
+        displayData.SPDisplaysDataType.length > 0
+      ) {
+        for (const gpu of displayData.SPDisplaysDataType) {
+          if (gpu.spdisplays_ndrvs) {
+            for (const display of gpu.spdisplays_ndrvs) {
+              if (
+                display.spdisplays_connection_type === "spdisplays_internal"
+              ) {
+                builtinDisplayOnline =
+                  display.spdisplays_online === "spdisplays_yes";
+              } else {
+                // External display
+                if (display.spdisplays_online === "spdisplays_yes") {
+                  externalDisplayCount++;
+                }
+              }
+            }
+          }
+        }
+      }
+
+      // Check display sleep status using pmset assertions
+      const assertionsOutput = await this.executeCommand("pmset -g assertions");
+      const preventDisplaySleep =
+        assertionsOutput.includes("PreventUserIdleDisplaySleep    1") ||
+        assertionsOutput.includes("InternalPreventDisplaySleep    1");
+
+      // Determine display status
+      let status: "on" | "off" | "external";
+      if (externalDisplayCount > 0) {
+        status = "external";
+      } else if (builtinDisplayOnline && preventDisplaySleep) {
+        status = "on";
+      } else {
+        status = "off";
+      }
+
+      return {
+        status,
+        externalDisplayCount,
+        builtinDisplayOnline,
+      };
+    } catch (error) {
+      logger.error(`Error getting display status: ${error}`);
+      return {
+        status: "off",
+        externalDisplayCount: 0,
+        builtinDisplayOnline: false,
+      };
+    }
   }
 
   private async getUptimeMinutes(): Promise<number> {
@@ -366,6 +438,36 @@ class MacOSPowerAgent {
       device: deviceConfig,
     };
 
+    // Display Status Sensor
+    const displayStatusConfig = {
+      name: "Display Status",
+      unique_id: `${this.deviceId}_display_status`,
+      state_topic: `${DISCOVERY_PREFIX}/sensor/${this.deviceId}/display_status/state`,
+      value_template: "{{ value_json.status }}",
+      device: deviceConfig,
+    };
+
+    // External Display Count Sensor
+    const externalDisplayCountConfig = {
+      name: "External Display Count",
+      unique_id: `${this.deviceId}_external_display_count`,
+      state_topic: `${DISCOVERY_PREFIX}/sensor/${this.deviceId}/external_display_count/state`,
+      value_template: "{{ value_json.external_display_count }}",
+      device: deviceConfig,
+    };
+
+    // Built-in Display Online Sensor
+    const builtinDisplayOnlineConfig = {
+      name: "Built-in Display Online",
+      unique_id: `${this.deviceId}_builtin_display_online`,
+      state_topic: `${DISCOVERY_PREFIX}/binary_sensor/${this.deviceId}/builtin_display_online/state`,
+      device_class: "connectivity",
+      payload_on: "ON",
+      payload_off: "OFF",
+      value_template: "{{ value_json.builtin_display_online }}",
+      device: deviceConfig,
+    };
+
     // Publish discovery configs
     this.client.publish(
       `${DISCOVERY_PREFIX}/sensor/${this.deviceId}/battery_level/config`,
@@ -394,13 +496,30 @@ class MacOSPowerAgent {
       { retain: true }
     );
 
+    this.client.publish(
+      `${DISCOVERY_PREFIX}/sensor/${this.deviceId}/display_status/config`,
+      JSON.stringify(displayStatusConfig),
+      { retain: true }
+    );
+    this.client.publish(
+      `${DISCOVERY_PREFIX}/sensor/${this.deviceId}/external_display_count/config`,
+      JSON.stringify(externalDisplayCountConfig),
+      { retain: true }
+    );
+    this.client.publish(
+      `${DISCOVERY_PREFIX}/binary_sensor/${this.deviceId}/builtin_display_online/config`,
+      JSON.stringify(builtinDisplayOnlineConfig),
+      { retain: true }
+    );
+
     logger.info("Published Home Assistant discovery configurations");
   }
 
   private async publishSensorData(): Promise<void> {
     try {
-      // Only publish uptime periodically since battery data comes from rawlog
+      // Only publish uptime and display status periodically since battery data comes from rawlog
       const uptimeMinutes = await this.getUptimeMinutes();
+      const displayInfo = await this.getDisplayStatus();
 
       // Uptime
       this.client.publish(
@@ -408,7 +527,33 @@ class MacOSPowerAgent {
         JSON.stringify({ uptime: uptimeMinutes })
       );
 
-      logger.debug(`Uptime: ${uptimeMinutes}min`);
+      // Display Status
+      this.client.publish(
+        `${DISCOVERY_PREFIX}/sensor/${this.deviceId}/display_status/state`,
+        JSON.stringify({ status: displayInfo.status })
+      );
+
+      // External Display Count
+      this.client.publish(
+        `${DISCOVERY_PREFIX}/sensor/${this.deviceId}/external_display_count/state`,
+        JSON.stringify({
+          external_display_count: displayInfo.externalDisplayCount,
+        })
+      );
+
+      // Built-in Display Online
+      this.client.publish(
+        `${DISCOVERY_PREFIX}/binary_sensor/${this.deviceId}/builtin_display_online/state`,
+        JSON.stringify({
+          builtin_display_online: displayInfo.builtinDisplayOnline
+            ? "ON"
+            : "OFF",
+        })
+      );
+
+      logger.debug(
+        `Uptime: ${uptimeMinutes}min, Display: ${displayInfo.status}, External: ${displayInfo.externalDisplayCount}, Built-in Online: ${displayInfo.builtinDisplayOnline}`
+      );
     } catch (error) {
       logger.error(`Error publishing sensor data: ${error}`);
     }
@@ -432,7 +577,7 @@ class MacOSPowerAgent {
     }
 
     logger.info(
-      `Started monitoring with real-time battery updates and ${this.config.UPDATE_INTERVAL}ms uptime updates`
+      `Started monitoring with real-time battery updates and ${this.config.UPDATE_INTERVAL}ms uptime/display updates`
     );
   }
 
@@ -550,6 +695,9 @@ async function main() {
     `macOS Power Agent for Home Assistant started (v${config.VERSION})`
   );
 }
+
+// Export for testing
+export { getComputerName, MacOSPowerAgent, type DisplayInfo };
 
 // Start the application
 main().catch((error: any) => {
