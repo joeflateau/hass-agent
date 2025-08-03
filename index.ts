@@ -699,8 +699,10 @@ async function main() {
 // Export for testing
 export { getComputerName, MacOSPowerAgent, type DisplayInfo };
 
-// Start the application
-main().catch((error: any) => {
-  logger.error(`Fatal error: ${error}`);
-  process.exit(1);
-});
+// Start the application only when this file is run directly
+if (import.meta.main) {
+  main().catch((error: any) => {
+    logger.error(`Fatal error: ${error}`);
+    process.exit(1);
+  });
+}
