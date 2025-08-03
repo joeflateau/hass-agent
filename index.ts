@@ -310,9 +310,9 @@ async function main() {
       return;
     }
     isShuttingDown = true;
-    
+
     logger.info(`\nReceived ${signal}, shutting down gracefully...`);
-    
+
     try {
       await agent.shutdown();
       logger.info("Shutdown complete");

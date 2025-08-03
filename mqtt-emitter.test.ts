@@ -37,6 +37,9 @@ describe("MqttEmitter", () => {
       once: mock(),
       end: mock(),
       subscribe: mock(),
+      options: {
+        reconnectPeriod: 5000
+      }
     };
 
     emitter = new MqttEmitter(config, mockLogger);
@@ -236,9 +239,18 @@ describe("MqttEmitter", () => {
   });
 
   describe("disconnect", () => {
-    it("should publish offline status and call disconnect", () => {
-      // Test that disconnect calls the right methods without waiting for callbacks
-      const disconnectPromise = emitter.disconnect();
+    it("should publish offline status and call disconnect", async () => {
+      // Setup mock behavior
+      mockMqttClient.publish.mockImplementation((topic: any, payload: any, options: any, callback: any) => {
+        if (callback) callback();
+      });
+      
+      mockMqttClient.end.mockImplementation((force: any, options: any, callback: any) => {
+        if (callback) callback();
+      });
+      
+      // Call disconnect and wait for completion
+      await emitter.disconnect();
 
       expect(mockMqttClient.publish).toHaveBeenCalledWith(
         "homeassistant/status/test-device",
@@ -247,29 +259,16 @@ describe("MqttEmitter", () => {
         expect.any(Function)
       );
 
-      // Simulate the publish callback first
-      const publishCallback =
-        mockMqttClient.publish.mock.calls[
-          mockMqttClient.publish.mock.calls.length - 1
-        ][3];
-      publishCallback();
-
-      // Now expect end to be called
       expect(mockMqttClient.end).toHaveBeenCalledWith(
-        false,
+        true,
         {},
         expect.any(Function)
       );
 
-      // Simulate the end callback
-      const endCallback = mockMqttClient.end.mock.calls[0][2];
-      endCallback();
-
-      return disconnectPromise.then(() => {
-        expect(mockLogger.info).toHaveBeenCalledWith(
-          "MQTT client disconnected"
-        );
-      });
+      expect(mockLogger.info).toHaveBeenCalledWith("MQTT client disconnected");
+      
+      // Check that reconnectPeriod was disabled
+      expect(mockMqttClient.options.reconnectPeriod).toBe(0);
     });
   });
 

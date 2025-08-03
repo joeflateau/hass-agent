@@ -70,8 +70,10 @@ export class MqttEmitter {
       }, 5000); // 5 second timeout
 
       // Disable auto-reconnect to prevent reconnection during shutdown
-      this.client.options.reconnectPeriod = 0;
-      
+      if (this.client.options) {
+        this.client.options.reconnectPeriod = 0;
+      }
+
       // Publish offline status before disconnecting
       this.client.publish(
         `${DISCOVERY_PREFIX}/status/${this.deviceId}`,
@@ -87,7 +89,6 @@ export class MqttEmitter {
       );
     });
   }
-
   public publishBatteryData(batteryInfo: BatteryInfo): void {
     try {
       // Battery Level
