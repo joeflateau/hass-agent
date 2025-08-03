@@ -63,13 +63,23 @@ export class MqttEmitter {
 
   public async disconnect(): Promise<void> {
     return new Promise((resolve) => {
+      // Set a timeout to prevent hanging
+      const timeout = setTimeout(() => {
+        this.logger.warn("MQTT disconnect timeout, forcing close");
+        resolve();
+      }, 5000); // 5 second timeout
+
+      // Disable auto-reconnect to prevent reconnection during shutdown
+      this.client.options.reconnectPeriod = 0;
+      
       // Publish offline status before disconnecting
       this.client.publish(
         `${DISCOVERY_PREFIX}/status/${this.deviceId}`,
         "offline",
         { qos: 1, retain: true },
         () => {
-          this.client.end(false, {}, () => {
+          this.client.end(true, {}, () => {
+            clearTimeout(timeout);
             this.logger.info("MQTT client disconnected");
             resolve();
           });

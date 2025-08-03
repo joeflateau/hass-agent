@@ -99,6 +99,7 @@ class MacOSPowerAgent {
   private displayReader: DisplayStatusReader;
   private batteryReader: BatteryStatusReader;
   private mqttEmitter: MqttEmitter;
+  private isShuttingDown = false;
 
   constructor(config: z.infer<typeof envSchema>, logger: winston.Logger) {
     this.config = config;
@@ -248,6 +249,12 @@ class MacOSPowerAgent {
   }
 
   public async shutdown(): Promise<void> {
+    // Prevent multiple shutdown calls
+    if (this.isShuttingDown) {
+      return;
+    }
+    this.isShuttingDown = true;
+
     this.logger.info("Shutting down...");
 
     // Clear timers if they exist
@@ -261,11 +268,15 @@ class MacOSPowerAgent {
       this.periodicTimer = undefined;
     }
 
-    // Kill pmset rawlog process
+    // Stop pmset rawlog process first
     this.batteryReader.stopPmsetRawlogMonitoring();
 
-    // Disconnect MQTT
-    await this.mqttEmitter.disconnect();
+    // Disconnect MQTT last (this will handle cleanup)
+    try {
+      await this.mqttEmitter.disconnect();
+    } catch (error) {
+      this.logger.error(`Error during MQTT disconnect: ${error}`);
+    }
   }
 }
 
@@ -291,21 +302,32 @@ async function main() {
 
   // Handle graceful shutdown
   const agent = new MacOSPowerAgent(config, logger);
+  let isShuttingDown = false;
+
+  const handleShutdown = async (signal: string) => {
+    if (isShuttingDown) {
+      logger.info(`Already shutting down, ignoring ${signal}`);
+      return;
+    }
+    isShuttingDown = true;
+    
+    logger.info(`\nReceived ${signal}, shutting down gracefully...`);
+    
+    try {
+      await agent.shutdown();
+      logger.info("Shutdown complete");
+      process.exit(0);
+    } catch (error) {
+      logger.error(`Error during shutdown: ${error}`);
+      process.exit(1);
+    }
+  };
 
   // Initialize the agent (this will start monitoring once connected)
   await agent.initialize();
 
-  process.on("SIGINT", async () => {
-    logger.info("\nReceived SIGINT, shutting down gracefully...");
-    await agent.shutdown();
-    process.exit(0);
-  });
-
-  process.on("SIGTERM", async () => {
-    logger.info("\nReceived SIGTERM, shutting down gracefully...");
-    await agent.shutdown();
-    process.exit(0);
-  });
+  process.on("SIGINT", () => handleShutdown("SIGINT"));
+  process.on("SIGTERM", () => handleShutdown("SIGTERM"));
 
   logger.info(
     `macOS Power Agent for Home Assistant started (v${config.VERSION})`
