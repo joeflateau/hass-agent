@@ -38,8 +38,8 @@ describe("MqttEmitter", () => {
       end: mock(),
       subscribe: mock(),
       options: {
-        reconnectPeriod: 5000
-      }
+        reconnectPeriod: 5000,
+      },
     };
 
     emitter = new MqttEmitter(config, mockLogger);
@@ -241,14 +241,18 @@ describe("MqttEmitter", () => {
   describe("disconnect", () => {
     it("should publish offline status and call disconnect", async () => {
       // Setup mock behavior
-      mockMqttClient.publish.mockImplementation((topic: any, payload: any, options: any, callback: any) => {
-        if (callback) callback();
-      });
-      
-      mockMqttClient.end.mockImplementation((force: any, options: any, callback: any) => {
-        if (callback) callback();
-      });
-      
+      mockMqttClient.publish.mockImplementation(
+        (topic: any, payload: any, options: any, callback: any) => {
+          if (callback) callback();
+        }
+      );
+
+      mockMqttClient.end.mockImplementation(
+        (force: any, options: any, callback: any) => {
+          if (callback) callback();
+        }
+      );
+
       // Call disconnect and wait for completion
       await emitter.disconnect();
 
@@ -266,7 +270,7 @@ describe("MqttEmitter", () => {
       );
 
       expect(mockLogger.info).toHaveBeenCalledWith("MQTT client disconnected");
-      
+
       // Check that reconnectPeriod was disabled
       expect(mockMqttClient.options.reconnectPeriod).toBe(0);
     });
