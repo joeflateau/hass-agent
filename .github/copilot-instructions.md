@@ -48,3 +48,10 @@ This is a TypeScript/Bun project that creates a macOS system agent for Home Assi
 - DEVICE_ID is required and must be unique
 - DEVICE_NAME defaults to system hostname if not provided
 - All configuration validated at startup with helpful error messages
+
+## Development Workflow
+
+- Always run tests after making code changes using the "Run Tests" VS Code task
+- Verify all tests pass before considering changes complete
+- Use `bun test` or the VS Code task to run the full test suite
+- Run these once you think you are finished, not for every step/edit
