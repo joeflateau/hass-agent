@@ -1,4 +1,13 @@
-import { afterEach, beforeEach, describe, expect, it, mock } from "bun:test";
+import {
+  afterAll,
+  afterEach,
+  beforeAll,
+  beforeEach,
+  describe,
+  expect,
+  it,
+  mock,
+} from "bun:test";
 import * as winston from "winston";
 
 // Mock winston logger
@@ -36,25 +45,32 @@ const mockDisplayStatusReader = mock(() => mockDisplayReader);
 const mockBatteryStatusReader = mock(() => mockBatteryReader);
 const mockMqttEmitterClass = mock(() => mockMqttEmitter);
 
-// Mock the modules
-mock.module("./display-status-reader.ts", () => ({
-  DisplayStatusReader: mockDisplayStatusReader,
-}));
-
-mock.module("./battery-status-reader.ts", () => ({
-  BatteryStatusReader: mockBatteryStatusReader,
-}));
-
-mock.module("./mqtt-emitter.ts", () => ({
-  MqttEmitter: mockMqttEmitterClass,
-}));
-
 // Import after mocking
 import { MacOSPowerAgent } from "./index.ts";
 
 describe("MacOSPowerAgent", () => {
   let agent: MacOSPowerAgent;
   let config: any;
+
+  beforeAll(() => {
+    // Set up module mocks
+    mock.module("./display-status-reader.ts", () => ({
+      DisplayStatusReader: mockDisplayStatusReader,
+    }));
+
+    mock.module("./battery-status-reader.ts", () => ({
+      BatteryStatusReader: mockBatteryStatusReader,
+    }));
+
+    mock.module("./mqtt-emitter.ts", () => ({
+      MqttEmitter: mockMqttEmitterClass,
+    }));
+  });
+
+  afterAll(() => {
+    // Reset all mocks to prevent interference with other test files
+    mock.restore();
+  });
 
   beforeEach(() => {
     config = {
@@ -70,7 +86,15 @@ describe("MacOSPowerAgent", () => {
       VERSION: "1.0.0",
     };
 
-    // Clear all mocks before creating new agent
+    agent = new MacOSPowerAgent(config, mockLogger);
+  });
+
+  afterEach(async () => {
+    if (agent) {
+      await agent.shutdown();
+    }
+
+    // Clear all mocks after each test to prevent interference
     mockDisplayStatusReader.mockClear();
     mockBatteryStatusReader.mockClear();
     mockMqttEmitterClass.mockClear();
@@ -85,14 +109,6 @@ describe("MacOSPowerAgent", () => {
     mockMqttEmitter.publishBatteryData.mockClear();
     mockMqttEmitter.publishUptimeData.mockClear();
     mockMqttEmitter.publishDisplayData.mockClear();
-
-    agent = new MacOSPowerAgent(config, mockLogger);
-  });
-
-  afterEach(async () => {
-    if (agent) {
-      await agent.shutdown();
-    }
   });
 
   describe("constructor", () => {
@@ -210,9 +226,8 @@ describe("MacOSPowerAgent", () => {
     });
 
     it("should clear timers if they exist", async () => {
-      // Set up some timers
+      // Set up periodic timer (upgradeCheckTimer is now handled by AutoUpdater)
       (agent as any).periodicTimer = setTimeout(() => {}, 1000);
-      (agent as any).upgradeCheckTimer = setTimeout(() => {}, 1000);
 
       const clearIntervalSpy = mock(() => {});
       global.clearInterval = clearIntervalSpy;
@@ -220,7 +235,7 @@ describe("MacOSPowerAgent", () => {
 
       await agent.shutdown();
 
-      expect(clearIntervalSpy).toHaveBeenCalledTimes(2);
+      expect(clearIntervalSpy).toHaveBeenCalledTimes(1);
     });
   });
 

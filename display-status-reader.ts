@@ -1,5 +1,5 @@
-import { spawn, type SpawnOptions } from "child_process";
 import * as winston from "winston";
+import { executeCommand } from "./command-utils.ts";
 
 // Display status interface
 export interface DisplayInfo {
@@ -18,7 +18,7 @@ export class DisplayStatusReader {
   public async getDisplayStatus(): Promise<DisplayInfo> {
     try {
       // Check external displays using system_profiler with better parsing
-      const displayOutput = await this.executeCommand(
+      const displayOutput = await executeCommand(
         "system_profiler SPDisplaysDataType -json"
       );
       const displayData = JSON.parse(displayOutput);
@@ -68,8 +68,8 @@ export class DisplayStatusReader {
 
       // Check display sleep status using multiple methods for better accuracy
       const [assertionsOutput, caffeineateOutput] = await Promise.allSettled([
-        this.executeCommand("pmset -g assertions"),
-        this.executeCommand("pmset -g ps").catch(() => ""), // Fallback if command fails
+        executeCommand("pmset -g assertions"),
+        executeCommand("pmset -g ps").catch(() => ""), // Fallback if command fails
       ]);
 
       const assertions =
@@ -111,7 +111,7 @@ export class DisplayStatusReader {
 
   public async getDetailedDisplayInfo(): Promise<any[]> {
     try {
-      const displayOutput = await this.executeCommand(
+      const displayOutput = await executeCommand(
         "system_profiler SPDisplaysDataType -json"
       );
       const displayData = JSON.parse(displayOutput);
@@ -195,37 +195,6 @@ export class DisplayStatusReader {
       this.logger.error(`Error getting detailed display info: ${error}`);
       return [];
     }
-  }
-
-  private async executeCommand(
-    command: string,
-    options?: SpawnOptions
-  ): Promise<string> {
-    return new Promise((resolve, reject) => {
-      const child = spawn("sh", ["-c", command], { ...options });
-      let output = "";
-      let error = "";
-
-      child.stdout?.on("data", (data) => {
-        output += data.toString();
-      });
-
-      child.stderr?.on("data", (data) => {
-        error += data.toString();
-      });
-
-      child.on("close", (code) => {
-        if (code === 0) {
-          resolve(output.trim());
-        } else {
-          reject(new Error(`Command failed with code ${code}: ${error}`));
-        }
-      });
-
-      child.on("error", (err) => {
-        reject(err);
-      });
-    });
   }
 
   private parseDisplayType(type: string): string {

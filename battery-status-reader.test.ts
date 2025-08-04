@@ -1,7 +1,34 @@
-import { afterEach, beforeEach, describe, expect, it, mock } from "bun:test";
+import {
+  afterAll,
+  afterEach,
+  beforeAll,
+  beforeEach,
+  describe,
+  expect,
+  it,
+  mock,
+} from "bun:test";
 import * as winston from "winston";
 import type { BatteryInfo } from "./battery-parser.ts";
 import { BatteryStatusReader } from "./battery-status-reader.ts";
+import { executeCommand } from "./command-utils.ts";
+
+// Mock spawn
+const mockSpawn = mock();
+const mockStdout = {
+  on: mock(),
+  resume: mock(),
+};
+const mockStderr = {
+  on: mock(),
+};
+const mockProcess = {
+  stdout: mockStdout,
+  stderr: mockStderr,
+  on: mock(),
+  kill: mock(),
+  killed: false,
+};
 
 // Mock winston logger
 const mockLogger: winston.Logger = {
@@ -14,23 +41,54 @@ const mockLogger: winston.Logger = {
 
 describe("BatteryStatusReader", () => {
   let reader: BatteryStatusReader;
-  let mockExecuteCommand: any;
+
+  beforeAll(() => {
+    // Set up module mocks
+    mock.module("./command-utils.ts", () => ({
+      executeCommand: mock(),
+    }));
+
+    mock.module("child_process", () => ({
+      spawn: mockSpawn,
+    }));
+
+    mock.module("readline", () => ({
+      createInterface: mock(() => ({
+        on: mock(),
+      })),
+    }));
+  });
+
+  afterAll(() => {
+    // Reset all mocks to prevent interference with other test files
+    mock.restore();
+  });
 
   beforeEach(() => {
     reader = new BatteryStatusReader(mockLogger);
-    // Mock the private executeCommand method
-    mockExecuteCommand = mock();
-    (reader as any).executeCommand = mockExecuteCommand;
+
+    // Reset spawn mock
+    mockSpawn.mockReturnValue(mockProcess);
   });
 
   afterEach(() => {
     reader.stopPmsetRawlogMonitoring();
+
+    // Clear all mocks after each test to prevent interference
+    mockSpawn.mockClear();
+    mockStdout.on.mockClear();
+    mockStderr.on.mockClear();
+    mockProcess.on.mockClear();
+    mockProcess.kill.mockClear();
+
+    // Reset executeCommand mock
+    (executeCommand as any).mockClear();
   });
 
   describe("getUptimeInfo", () => {
     it("should return uptime in minutes", async () => {
       const bootTimeSeconds = Math.floor(Date.now() / 1000) - 3600; // 1 hour ago
-      mockExecuteCommand.mockResolvedValue(
+      (executeCommand as any).mockResolvedValue(
         `kern.boottime: { sec = ${bootTimeSeconds}, usec = 0 } Sat Aug  3 10:00:00 2024`
       );
 
@@ -41,7 +99,7 @@ describe("BatteryStatusReader", () => {
     });
 
     it("should return -1 on command error", async () => {
-      mockExecuteCommand.mockRejectedValue(new Error("Command failed"));
+      (executeCommand as any).mockRejectedValue(new Error("Command failed"));
 
       const result = await reader.getUptimeInfo();
 
@@ -50,7 +108,7 @@ describe("BatteryStatusReader", () => {
     });
 
     it("should return -1 when boot time format is invalid", async () => {
-      mockExecuteCommand.mockResolvedValue("invalid output");
+      (executeCommand as any).mockResolvedValue("invalid output");
 
       const result = await reader.getUptimeInfo();
 

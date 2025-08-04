@@ -1,5 +1,15 @@
-import { beforeEach, describe, expect, it, mock } from "bun:test";
+import {
+  afterAll,
+  afterEach,
+  beforeAll,
+  beforeEach,
+  describe,
+  expect,
+  it,
+  mock,
+} from "bun:test";
 import * as winston from "winston";
+import { executeCommand } from "./command-utils.ts";
 import { DisplayStatusReader } from "./display-status-reader.ts";
 
 // Mock winston logger
@@ -13,18 +23,31 @@ const mockLogger: winston.Logger = {
 
 describe("DisplayStatusReader", () => {
   let reader: DisplayStatusReader;
-  let mockExecuteCommand: any;
+
+  beforeAll(() => {
+    // Set up module mocks
+    mock.module("./command-utils.ts", () => ({
+      executeCommand: mock(),
+    }));
+  });
+
+  afterAll(() => {
+    // Reset all mocks to prevent interference with other test files
+    mock.restore();
+  });
 
   beforeEach(() => {
     reader = new DisplayStatusReader(mockLogger);
-    // Mock the private executeCommand method
-    mockExecuteCommand = mock();
-    (reader as any).executeCommand = mockExecuteCommand;
+  });
+
+  afterEach(() => {
+    // Reset executeCommand mock after each test
+    (executeCommand as any).mockClear();
   });
 
   describe("getDisplayStatus", () => {
     it("should return off status when no displays found", async () => {
-      mockExecuteCommand.mockImplementation(async (command: string) => {
+      (executeCommand as any).mockImplementation(async (command: string) => {
         switch (command) {
           case "system_profiler SPDisplaysDataType -json":
             return JSON.stringify({ SPDisplaysDataType: [] });
@@ -47,7 +70,7 @@ describe("DisplayStatusReader", () => {
     });
 
     it("should detect built-in display online", async () => {
-      mockExecuteCommand.mockImplementation(async (command: string) => {
+      (executeCommand as any).mockImplementation(async (command: string) => {
         switch (command) {
           case "system_profiler SPDisplaysDataType -json":
             return JSON.stringify({
@@ -83,7 +106,7 @@ describe("DisplayStatusReader", () => {
     });
 
     it("should detect external display", async () => {
-      mockExecuteCommand.mockImplementation(async (command: string) => {
+      (executeCommand as any).mockImplementation(async (command: string) => {
         switch (command) {
           case "system_profiler SPDisplaysDataType -json":
             return JSON.stringify({
@@ -119,7 +142,7 @@ describe("DisplayStatusReader", () => {
     });
 
     it("should handle mixed displays - both internal and external", async () => {
-      mockExecuteCommand.mockImplementation(async (command: string) => {
+      (executeCommand as any).mockImplementation(async (command: string) => {
         switch (command) {
           case "system_profiler SPDisplaysDataType -json":
             return JSON.stringify({
@@ -161,7 +184,7 @@ describe("DisplayStatusReader", () => {
     });
 
     it("should handle built-in display offline but external display present", async () => {
-      mockExecuteCommand.mockImplementation(async (command: string) => {
+      (executeCommand as any).mockImplementation(async (command: string) => {
         switch (command) {
           case "system_profiler SPDisplaysDataType -json":
             return JSON.stringify({
@@ -203,7 +226,7 @@ describe("DisplayStatusReader", () => {
     });
 
     it("should return off status on command error", async () => {
-      mockExecuteCommand.mockImplementation(async () => {
+      (executeCommand as any).mockImplementation(async () => {
         throw new Error("Command failed");
       });
 
@@ -220,7 +243,7 @@ describe("DisplayStatusReader", () => {
 
   describe("getDetailedDisplayInfo", () => {
     it("should return empty array when no displays found", async () => {
-      mockExecuteCommand.mockImplementation(async () => {
+      (executeCommand as any).mockImplementation(async () => {
         return JSON.stringify({ SPDisplaysDataType: [] });
       });
 
@@ -230,7 +253,7 @@ describe("DisplayStatusReader", () => {
     });
 
     it("should return detailed display information", async () => {
-      mockExecuteCommand.mockImplementation(async () => {
+      (executeCommand as any).mockImplementation(async () => {
         return JSON.stringify({
           SPDisplaysDataType: [
             {
@@ -284,7 +307,7 @@ describe("DisplayStatusReader", () => {
     });
 
     it("should return empty array on command error", async () => {
-      mockExecuteCommand.mockImplementation(async () => {
+      (executeCommand as any).mockImplementation(async () => {
         throw new Error("Command failed");
       });
 

@@ -1,9 +1,9 @@
 #!/usr/bin/env bun
 
-import { spawn, type SpawnOptions } from "child_process";
 import { hostname } from "os";
 import * as winston from "winston";
 import { z } from "zod";
+import { AutoUpdater, type AutoUpdaterConfig } from "./auto-updater.ts";
 import { BatteryStatusReader } from "./battery-status-reader.ts";
 import {
   DisplayStatusReader,
@@ -94,11 +94,11 @@ declare const VERSION: string;
 class MacOSPowerAgent {
   private config: z.infer<typeof envSchema>;
   private logger: winston.Logger;
-  private upgradeCheckTimer?: NodeJS.Timeout;
   private periodicTimer?: NodeJS.Timeout;
   private displayReader: DisplayStatusReader;
   private batteryReader: BatteryStatusReader;
   private mqttEmitter: MqttEmitter;
+  private autoUpdater: AutoUpdater;
   private isShuttingDown = false;
 
   constructor(config: z.infer<typeof envSchema>, logger: winston.Logger) {
@@ -119,6 +119,16 @@ class MacOSPowerAgent {
     };
 
     this.mqttEmitter = new MqttEmitter(mqttConfig, logger);
+
+    // Initialize auto-updater
+    const autoUpdaterConfig: AutoUpdaterConfig = {
+      autoUpgrade: this.config.AUTO_UPGRADE,
+      upgradeCheckInterval: this.config.UPGRADE_CHECK_INTERVAL,
+      installScriptUrl: this.config.INSTALL_SCRIPT_URL,
+      version: this.config.VERSION,
+    };
+
+    this.autoUpdater = new AutoUpdater(autoUpdaterConfig, logger);
 
     // Set up battery update callback
     this.batteryReader.setBatteryUpdateCallback((batteryInfo) => {
@@ -172,80 +182,12 @@ class MacOSPowerAgent {
       this.publishSensorData();
     }, this.config.UPDATE_INTERVAL);
 
-    // Set up auto-upgrade check if enabled
-    if (this.config.AUTO_UPGRADE && this.config.VERSION !== "development") {
-      this.scheduleUpgradeCheck();
-    }
+    // Start auto-updater
+    this.autoUpdater.start();
 
     this.logger.info(
       `Started monitoring with real-time battery updates and ${this.config.UPDATE_INTERVAL}ms uptime/display updates`
     );
-  }
-
-  private scheduleUpgradeCheck(): void {
-    const runUpgradeCheck = async (): Promise<void> => {
-      try {
-        this.logger.info("Checking for updates...");
-
-        // Execute the install script with detached process so it can outlive this process
-        // The install script may need to kill this process to update the binary
-        await this.executeCommand(
-          `curl -fsSL "${this.config.INSTALL_SCRIPT_URL}" | bash`,
-          {
-            env: { ...process.env, INSTALLED_VERSION: this.config.VERSION },
-            detached: true, // Allow the process to run independently
-            stdio: "ignore", // Disconnect stdio so child can outlive parent
-          }
-        );
-      } catch (error) {
-        this.logger.error(`Upgrade check failed: ${error}`);
-      }
-    };
-
-    // Initial check immediately
-    runUpgradeCheck();
-
-    // Schedule periodic checks
-    this.upgradeCheckTimer = setInterval(() => {
-      runUpgradeCheck();
-    }, this.config.UPGRADE_CHECK_INTERVAL);
-
-    this.logger.info(
-      `Auto-upgrade enabled, checking every ${
-        this.config.UPGRADE_CHECK_INTERVAL / (60 * 60 * 1000)
-      } hours`
-    );
-  }
-
-  private async executeCommand(
-    command: string,
-    options?: SpawnOptions
-  ): Promise<string> {
-    return new Promise((resolve, reject) => {
-      const child = spawn("sh", ["-c", command], { ...options });
-      let output = "";
-      let error = "";
-
-      child.stdout?.on("data", (data) => {
-        output += data.toString();
-      });
-
-      child.stderr?.on("data", (data) => {
-        error += data.toString();
-      });
-
-      child.on("close", (code) => {
-        if (code === 0) {
-          resolve(output.trim());
-        } else {
-          reject(new Error(`Command failed with code ${code}: ${error}`));
-        }
-      });
-
-      child.on("error", (err) => {
-        reject(err);
-      });
-    });
   }
 
   public async shutdown(): Promise<void> {
@@ -257,12 +199,10 @@ class MacOSPowerAgent {
 
     this.logger.info("Shutting down...");
 
-    // Clear timers if they exist
-    if (this.upgradeCheckTimer) {
-      clearInterval(this.upgradeCheckTimer);
-      this.upgradeCheckTimer = undefined;
-    }
+    // Stop auto-updater
+    this.autoUpdater.stop();
 
+    // Clear periodic timer if it exists
     if (this.periodicTimer) {
       clearInterval(this.periodicTimer);
       this.periodicTimer = undefined;

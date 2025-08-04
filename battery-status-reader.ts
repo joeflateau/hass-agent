@@ -1,7 +1,8 @@
-import { spawn, type ChildProcess, type SpawnOptions } from "child_process";
+import { spawn, type ChildProcess } from "child_process";
 import * as readline from "readline";
 import * as winston from "winston";
 import { parsePmsetRawlogLine, type BatteryInfo } from "./battery-parser.ts";
+import { executeCommand } from "./command-utils.ts";
 
 export interface UptimeInfo {
   uptimeMinutes: number;
@@ -24,7 +25,7 @@ export class BatteryStatusReader {
 
   public async getUptimeInfo(): Promise<UptimeInfo> {
     try {
-      const output = await this.executeCommand("sysctl kern.boottime");
+      const output = await executeCommand("sysctl kern.boottime");
       // sysctl kern.boottime returns something like: kern.boottime: { sec = 1722409523, usec = 0 } Thu Aug  1 15:12:03 2024
       const secMatch = output.match(/sec = (\d+)/);
       if (!secMatch || !secMatch[1]) {
@@ -102,37 +103,6 @@ export class BatteryStatusReader {
       this.pmsetProcess.kill("SIGTERM");
       this.pmsetProcess = undefined;
     }
-  }
-
-  private async executeCommand(
-    command: string,
-    options?: SpawnOptions
-  ): Promise<string> {
-    return new Promise((resolve, reject) => {
-      const child = spawn("sh", ["-c", command], { ...options });
-      let output = "";
-      let error = "";
-
-      child.stdout?.on("data", (data) => {
-        output += data.toString();
-      });
-
-      child.stderr?.on("data", (data) => {
-        error += data.toString();
-      });
-
-      child.on("close", (code) => {
-        if (code === 0) {
-          resolve(output.trim());
-        } else {
-          reject(new Error(`Command failed with code ${code}: ${error}`));
-        }
-      });
-
-      child.on("error", (err) => {
-        reject(err);
-      });
-    });
   }
 
   private parsePmsetRawlogLine(line: string): BatteryInfo | null {
