@@ -103,10 +103,20 @@ export class MqttEmitter {
         JSON.stringify({ is_charging: batteryInfo.isCharging ? "ON" : "OFF" })
       );
 
-      // Time Remaining
+      // Time Remaining to Empty (when discharging)
       this.client.publish(
-        `${DISCOVERY_PREFIX}/sensor/${this.deviceId}/time_remaining/state`,
-        JSON.stringify({ time_remaining: batteryInfo.timeRemaining })
+        `${DISCOVERY_PREFIX}/sensor/${this.deviceId}/time_remaining_to_empty/state`,
+        JSON.stringify({
+          time_remaining_to_empty: batteryInfo.timeRemainingToEmpty,
+        })
+      );
+
+      // Time Remaining to Full (when charging)
+      this.client.publish(
+        `${DISCOVERY_PREFIX}/sensor/${this.deviceId}/time_remaining_to_full/state`,
+        JSON.stringify({
+          time_remaining_to_full: batteryInfo.timeRemainingToFull,
+        })
       );
 
       // AC Power (derived from power source)
@@ -248,13 +258,29 @@ export class MqttEmitter {
       device: deviceConfig,
     };
 
-    // Battery Time Remaining Sensor
-    const timeRemainingConfig = {
-      name: "Battery Time Remaining",
-      unique_id: `${this.deviceId}_time_remaining`,
-      state_topic: `${DISCOVERY_PREFIX}/sensor/${this.deviceId}/time_remaining/state`,
+    // Battery Time Remaining to Empty Sensor
+    const timeRemainingToEmptyConfig = {
+      name: "Battery Time Remaining to Empty",
+      unique_id: `${this.deviceId}_time_remaining_to_empty`,
+      state_topic: `${DISCOVERY_PREFIX}/sensor/${this.deviceId}/time_remaining_to_empty/state`,
       unit_of_measurement: "min",
-      value_template: "{{ value_json.time_remaining }}",
+      value_template: "{{ value_json.time_remaining_to_empty }}",
+      icon: "mdi:battery-clock",
+      entity_category: "diagnostic",
+      enabled_by_default: true,
+      device: deviceConfig,
+    };
+
+    // Battery Time Remaining to Full Sensor
+    const timeRemainingToFullConfig = {
+      name: "Battery Time Remaining to Full",
+      unique_id: `${this.deviceId}_time_remaining_to_full`,
+      state_topic: `${DISCOVERY_PREFIX}/sensor/${this.deviceId}/time_remaining_to_full/state`,
+      unit_of_measurement: "min",
+      value_template: "{{ value_json.time_remaining_to_full }}",
+      icon: "mdi:battery-charging",
+      entity_category: "diagnostic",
+      enabled_by_default: true,
       device: deviceConfig,
     };
 
@@ -325,8 +351,13 @@ export class MqttEmitter {
       { retain: true }
     );
     this.client.publish(
-      `${DISCOVERY_PREFIX}/sensor/${this.deviceId}/time_remaining/config`,
-      JSON.stringify(timeRemainingConfig),
+      `${DISCOVERY_PREFIX}/sensor/${this.deviceId}/time_remaining_to_empty/config`,
+      JSON.stringify(timeRemainingToEmptyConfig),
+      { retain: true }
+    );
+    this.client.publish(
+      `${DISCOVERY_PREFIX}/sensor/${this.deviceId}/time_remaining_to_full/config`,
+      JSON.stringify(timeRemainingToFullConfig),
       { retain: true }
     );
 

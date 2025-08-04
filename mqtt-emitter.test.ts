@@ -106,7 +106,8 @@ describe("MqttEmitter", () => {
         batteryLevel: 85,
         isCharging: true,
         powerSource: "AC",
-        timeRemaining: 120,
+        timeRemainingToEmpty: -1,
+        timeRemainingToFull: 120,
         cycleCount: 100,
         condition: "Normal",
       };
@@ -124,8 +125,13 @@ describe("MqttEmitter", () => {
       );
 
       expect(mockMqttClient.publish).toHaveBeenCalledWith(
-        "homeassistant/sensor/test-device/time_remaining/state",
-        JSON.stringify({ time_remaining: 120 })
+        "homeassistant/sensor/test-device/time_remaining_to_empty/state",
+        JSON.stringify({ time_remaining_to_empty: -1 })
+      );
+
+      expect(mockMqttClient.publish).toHaveBeenCalledWith(
+        "homeassistant/sensor/test-device/time_remaining_to_full/state",
+        JSON.stringify({ time_remaining_to_full: 120 })
       );
 
       expect(mockMqttClient.publish).toHaveBeenCalledWith(
@@ -139,7 +145,8 @@ describe("MqttEmitter", () => {
         batteryLevel: 50,
         isCharging: false,
         powerSource: "Battery",
-        timeRemaining: 240,
+        timeRemainingToEmpty: 240,
+        timeRemainingToFull: -1,
         cycleCount: 100,
         condition: "Normal",
       };
@@ -282,7 +289,8 @@ describe("MqttEmitter", () => {
         batteryLevel: 85,
         isCharging: true,
         powerSource: "AC",
-        timeRemaining: 120,
+        timeRemainingToEmpty: -1,
+        timeRemainingToFull: 120,
         cycleCount: 100,
         condition: "Normal",
       };

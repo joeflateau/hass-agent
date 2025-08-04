@@ -176,7 +176,8 @@ describe("MacOSPowerAgent", () => {
         batteryLevel: 85,
         isCharging: true,
         powerSource: "AC",
-        timeRemaining: 120,
+        timeRemainingToEmpty: -1,
+        timeRemainingToFull: 120,
         cycleCount: 100,
         condition: "Normal",
       };

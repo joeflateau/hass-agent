@@ -3,7 +3,8 @@
 export interface BatteryInfo {
   isCharging: boolean;
   batteryLevel: number;
-  timeRemaining: number;
+  timeRemainingToEmpty: number; // Time remaining until battery depletes (when discharging)
+  timeRemainingToFull: number; // Time remaining until fully charged (when charging)
   powerSource: string;
   cycleCount: number;
   condition: string;
@@ -30,9 +31,23 @@ export function parsePmsetRawlogLine(line: string): BatteryInfo | null {
 
     // Extract time remaining
     const timeMatch = line.match(/Time=(\d+):(\d+)/);
-    let timeRemaining = -1;
+    let timeRemainingMinutes = -1;
     if (timeMatch?.[1] && timeMatch?.[2]) {
-      timeRemaining = parseInt(timeMatch[1]) * 60 + parseInt(timeMatch[2]);
+      timeRemainingMinutes =
+        parseInt(timeMatch[1]) * 60 + parseInt(timeMatch[2]);
+    }
+
+    // Determine which time field to populate based on charging state
+    let timeRemainingToEmpty = -1;
+    let timeRemainingToFull = -1;
+
+    if (timeRemainingMinutes > 0) {
+      // Changed from >= 0 to > 0
+      if (isCharging) {
+        timeRemainingToFull = timeRemainingMinutes;
+      } else {
+        timeRemainingToEmpty = timeRemainingMinutes;
+      }
     }
 
     // Extract cycle count
@@ -42,7 +57,8 @@ export function parsePmsetRawlogLine(line: string): BatteryInfo | null {
     return {
       isCharging,
       batteryLevel,
-      timeRemaining,
+      timeRemainingToEmpty,
+      timeRemainingToFull,
       powerSource: hasAC ? "AC" : "Battery",
       cycleCount,
       condition: "Good", // rawlog doesn't provide condition, would need separate call

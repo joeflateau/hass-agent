@@ -11,7 +11,8 @@ describe("MacOS Power Agent", () => {
       expect(result).toEqual({
         isCharging: true,
         batteryLevel: 85,
-        timeRemaining: 83, // 1 hour 23 minutes = 83 minutes
+        timeRemainingToEmpty: -1,
+        timeRemainingToFull: 83, // 1 hour 23 minutes = 83 minutes
         powerSource: "AC",
         cycleCount: 245,
         condition: "Good",
@@ -26,7 +27,8 @@ describe("MacOS Power Agent", () => {
       expect(result).toEqual({
         isCharging: false,
         batteryLevel: 97,
-        timeRemaining: 302, // 5 hours 2 minutes = 302 minutes
+        timeRemainingToEmpty: 302, // 5 hours 2 minutes = 302 minutes
+        timeRemainingToFull: -1,
         powerSource: "Battery",
         cycleCount: 489,
         condition: "Good",
@@ -41,7 +43,8 @@ describe("MacOS Power Agent", () => {
       expect(result).toEqual({
         isCharging: true,
         batteryLevel: 45,
-        timeRemaining: 135, // 2 hours 15 minutes = 135 minutes
+        timeRemainingToEmpty: -1,
+        timeRemainingToFull: 135, // 2 hours 15 minutes = 135 minutes
         powerSource: "AC",
         cycleCount: 123,
         condition: "Good",
@@ -56,7 +59,8 @@ describe("MacOS Power Agent", () => {
       expect(result).toEqual({
         isCharging: false, // "Charged" is not "Charging"
         batteryLevel: 100,
-        timeRemaining: 0,
+        timeRemainingToEmpty: -1,
+        timeRemainingToFull: -1, // No time remaining when fully charged
         powerSource: "AC",
         cycleCount: 567,
         condition: "Good",
@@ -84,7 +88,8 @@ describe("MacOS Power Agent", () => {
       expect(result).toEqual({
         isCharging: false,
         batteryLevel: 50,
-        timeRemaining: -1, // No time info available
+        timeRemainingToEmpty: -1, // No time info available
+        timeRemainingToFull: -1,
         powerSource: "Battery",
         cycleCount: 300,
         condition: "Good",
@@ -95,12 +100,12 @@ describe("MacOS Power Agent", () => {
       const line1 =
         " No AC; Not Charging; 25%; Cap=25: FCC=100; Design=8694; Time=0:05; -500mA; Cycles=100/1000; Location=0;";
       const result1 = parsePmsetRawlogLine(line1);
-      expect(result1?.timeRemaining).toBe(5); // 5 minutes
+      expect(result1?.timeRemainingToEmpty).toBe(5); // 5 minutes (not charging)
 
       const line2 =
         " No AC; Not Charging; 75%; Cap=75: FCC=100; Design=8694; Time=10:00; -800mA; Cycles=200/1000; Location=0;";
       const result2 = parsePmsetRawlogLine(line2);
-      expect(result2?.timeRemaining).toBe(600); // 10 hours = 600 minutes
+      expect(result2?.timeRemainingToEmpty).toBe(600); // 10 hours = 600 minutes (not charging)
     });
 
     test("should handle zero cycle count", () => {
@@ -127,7 +132,8 @@ describe("MacOS Power Agent", () => {
       expect(result).toEqual({
         isCharging: true,
         batteryLevel: 43,
-        timeRemaining: 121, // 2 hours 1 minute = 121 minutes
+        timeRemainingToEmpty: -1,
+        timeRemainingToFull: 121, // 2 hours 1 minute = 121 minutes (charging)
         powerSource: "AC",
         cycleCount: 490,
         condition: "Good",
