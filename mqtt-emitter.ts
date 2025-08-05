@@ -203,95 +203,54 @@ export class MqttEmitter {
         { qos: 1, retain: true }
       );
 
-      if (lolStatus.isInGame) {
-        // Publish game mode
-        if (lolStatus.gameMode) {
-          this.client.publish(
-            `${DISCOVERY_PREFIX}/sensor/${this.deviceId}/lol_game_mode/state`,
-            lolStatus.gameMode,
-            { qos: 1, retain: true }
-          );
-        }
-
-        // Publish game time
-        if (lolStatus.gameTime !== undefined) {
-          this.client.publish(
-            `${DISCOVERY_PREFIX}/sensor/${this.deviceId}/lol_game_time/state`,
-            Math.round(lolStatus.gameTime).toString(),
-            { qos: 1, retain: true }
-          );
-        }
-
-        // Publish champion name
-        if (lolStatus.championName) {
-          this.logger.debug(
-            `Publishing champion name: ${lolStatus.championName}`
-          );
-          this.client.publish(
-            `${DISCOVERY_PREFIX}/sensor/${this.deviceId}/lol_champion/state`,
-            lolStatus.championName,
-            { qos: 1, retain: true }
-          );
-        } else {
-          this.logger.debug(
-            `No champion name to publish (value: ${lolStatus.championName})`
-          );
-        }
-
-        // Publish level
-        if (lolStatus.level !== undefined) {
-          this.client.publish(
-            `${DISCOVERY_PREFIX}/sensor/${this.deviceId}/lol_level/state`,
-            lolStatus.level.toString(),
-            { qos: 1, retain: true }
-          );
-        }
-
-        // Publish current gold
-        if (lolStatus.currentGold !== undefined) {
-          this.client.publish(
-            `${DISCOVERY_PREFIX}/sensor/${this.deviceId}/lol_gold/state`,
-            lolStatus.currentGold.toString(),
-            { qos: 1, retain: true }
-          );
-        }
-
-        // Publish K/D/A if available
-        if (lolStatus.score) {
-          this.client.publish(
-            `${DISCOVERY_PREFIX}/sensor/${this.deviceId}/lol_kills/state`,
-            lolStatus.score.kills.toString(),
-            { qos: 1, retain: true }
-          );
-          this.client.publish(
-            `${DISCOVERY_PREFIX}/sensor/${this.deviceId}/lol_deaths/state`,
-            lolStatus.score.deaths.toString(),
-            { qos: 1, retain: true }
-          );
-          this.client.publish(
-            `${DISCOVERY_PREFIX}/sensor/${this.deviceId}/lol_assists/state`,
-            lolStatus.score.assists.toString(),
-            { qos: 1, retain: true }
-          );
-        }
-
-        // Publish detailed game info as JSON
+      // Helper function to publish LoL sensor data
+      const publishLoLSensor = (
+        sensor: string,
+        value: string | number | null | undefined
+      ) => {
         this.client.publish(
-          `${DISCOVERY_PREFIX}/sensor/${this.deviceId}/lol_game_info/state`,
-          JSON.stringify({
-            gameTime: lolStatus.gameTime,
-            gameMode: lolStatus.gameMode,
-            mapName: lolStatus.mapName,
-            mapId: lolStatus.mapId,
-            activePlayerName: lolStatus.activePlayerName,
-            championName: lolStatus.championName,
-            level: lolStatus.level,
-            currentGold: lolStatus.currentGold,
-            score: lolStatus.score,
-            team: lolStatus.team,
-          })
+          `${DISCOVERY_PREFIX}/sensor/${this.deviceId}/lol_${sensor}/state`,
+          value?.toString() ?? "null",
+          { qos: 1, retain: true }
+        );
+      };
+
+      // Always publish all sensor data - values will be null when not in game
+      publishLoLSensor("game_mode", lolStatus.gameMode);
+      publishLoLSensor(
+        "game_time",
+        lolStatus.gameTime ? Math.round(lolStatus.gameTime) : null
+      );
+
+      if (lolStatus.championName) {
+        this.logger.debug(
+          `Publishing champion name: ${lolStatus.championName}`
         );
       }
+      publishLoLSensor("champion", lolStatus.championName);
+
+      publishLoLSensor("level", lolStatus.level);
+      publishLoLSensor("gold", lolStatus.currentGold);
+      publishLoLSensor("kills", lolStatus.score?.kills);
+      publishLoLSensor("deaths", lolStatus.score?.deaths);
+      publishLoLSensor("assists", lolStatus.score?.assists);
+
+      // Publish detailed game info as JSON
+      publishLoLSensor(
+        "game_info",
+        JSON.stringify({
+          gameTime: lolStatus.gameTime,
+          gameMode: lolStatus.gameMode,
+          mapName: lolStatus.mapName,
+          mapId: lolStatus.mapId,
+          activePlayerName: lolStatus.activePlayerName,
+          championName: lolStatus.championName,
+          level: lolStatus.level,
+          currentGold: lolStatus.currentGold,
+          score: lolStatus.score,
+          team: lolStatus.team,
+        })
+      );
     } catch (error) {
       this.logger.error(`Error publishing LoL game status: ${error}`);
     }
