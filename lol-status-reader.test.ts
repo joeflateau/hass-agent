@@ -52,9 +52,10 @@ describe("LoLStatusReader", () => {
       data: {
         riotIdGameName: "TestPlayer",
         championStats: {
-          kills: 5,
-          deaths: 2,
-          assists: 8,
+          // This contains combat stats, not KDA
+          abilityPower: 0,
+          armor: 25,
+          armorPenetrationFlat: 0,
         },
         level: 12,
         currentGold: 4500,
@@ -62,18 +63,28 @@ describe("LoLStatusReader", () => {
       },
     });
 
-    // Mock successful player list response
+    // Mock successful player list response with scores
     mockApi.liveclientdata.getLiveclientdataPlayerlist.mockResolvedValue({
       data: [
         {
           riotIdGameName: "TestPlayer",
           championName: "Jinx",
           team: "ORDER",
+          scores: {
+            kills: 5,
+            deaths: 2,
+            assists: 8,
+          },
         },
         {
           riotIdGameName: "EnemyPlayer",
           championName: "Ashe",
           team: "CHAOS",
+          scores: {
+            kills: 3,
+            deaths: 4,
+            assists: 6,
+          },
         },
       ],
     });
@@ -95,6 +106,62 @@ describe("LoLStatusReader", () => {
       kills: 5,
       deaths: 2,
       assists: 8,
+    });
+  });
+
+  test("should get KDA from player list when scores are missing from active player", async () => {
+    // Mock successful game stats response
+    mockApi.liveclientdata.getLiveclientdataGamestats.mockResolvedValue({
+      data: {
+        gameTime: 750,
+        gameMode: "CLASSIC",
+        mapName: "Summoner's Rift",
+        mapId: 11,
+      },
+    });
+
+    // Mock active player response without scores
+    mockApi.liveclientdata.getLiveclientdataActiveplayer.mockResolvedValue({
+      data: {
+        riotIdGameName: "TestPlayer",
+        level: 14,
+        currentGold: 3800,
+        team: "ORDER",
+        championStats: {
+          // Combat stats, not KDA
+          abilityPower: 45,
+          armor: 32,
+          magicResist: 30,
+        },
+      },
+    });
+
+    // Mock player list response with KDA scores
+    mockApi.liveclientdata.getLiveclientdataPlayerlist.mockResolvedValue({
+      data: [
+        {
+          riotIdGameName: "TestPlayer",
+          championName: "Lux",
+          team: "ORDER",
+          scores: {
+            kills: 6,
+            deaths: 1,
+            assists: 11,
+          },
+        },
+      ],
+    });
+
+    const reader = new LoLStatusReader(logger);
+    const status = await reader.getGameStatus();
+
+    expect(status.isInGame).toBe(true);
+    expect(status.activePlayerName).toBe("TestPlayer");
+    expect(status.championName).toBe("Lux");
+    expect(status.score).toEqual({
+      kills: 6,
+      deaths: 1,
+      assists: 11,
     });
   });
 

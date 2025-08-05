@@ -169,6 +169,17 @@ export class LoLStatusReader {
             `Active player keys: ${Object.keys(activePlayer).join(", ")}`
           );
 
+          // Log specific stats-related properties if they exist
+          if (activePlayer.championStats) {
+            this.logger.debug(
+              `Champion stats: ${JSON.stringify(
+                activePlayer.championStats,
+                null,
+                2
+              )}`
+            );
+          }
+
           status.activePlayerName =
             activePlayer.riotIdGameName || activePlayer.summonerName;
           status.level = activePlayer.level;
@@ -203,18 +214,21 @@ export class LoLStatusReader {
               this.logger.debug(
                 `Champion name from player list: ${activePlayerInList.championName}`
               );
+
+              // Get KDA from player list scores
+              if (activePlayerInList.scores) {
+                status.score = {
+                  kills: activePlayerInList.scores.kills || 0,
+                  deaths: activePlayerInList.scores.deaths || 0,
+                  assists: activePlayerInList.scores.assists || 0,
+                };
+                this.logger.debug(
+                  `KDA from player list: ${status.score.kills}/${status.score.deaths}/${status.score.assists}`
+                );
+              }
             }
           } catch (playerListError) {
             this.logger.debug("Could not fetch player list for champion name");
-          }
-
-          // Extract score if available
-          if (activePlayer.championStats) {
-            status.score = {
-              kills: activePlayer.championStats.kills || 0,
-              deaths: activePlayer.championStats.deaths || 0,
-              assists: activePlayer.championStats.assists || 0,
-            };
           }
 
           status.team = activePlayer.team;
