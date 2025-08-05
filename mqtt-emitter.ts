@@ -192,6 +192,10 @@ export class MqttEmitter {
 
   public publishLoLGameStatus(lolStatus: LoLGameStatus): void {
     try {
+      this.logger.debug(
+        `Publishing LoL status: ${JSON.stringify(lolStatus, null, 2)}`
+      );
+
       // Publish in-game status
       this.client.publish(
         `${DISCOVERY_PREFIX}/binary_sensor/${this.deviceId}/lol_in_game/state`,
@@ -220,10 +224,17 @@ export class MqttEmitter {
 
         // Publish champion name
         if (lolStatus.championName) {
+          this.logger.debug(
+            `Publishing champion name: ${lolStatus.championName}`
+          );
           this.client.publish(
             `${DISCOVERY_PREFIX}/sensor/${this.deviceId}/lol_champion/state`,
             lolStatus.championName,
             { qos: 1, retain: true }
+          );
+        } else {
+          this.logger.debug(
+            `No champion name to publish (value: ${lolStatus.championName})`
           );
         }
 

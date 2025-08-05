@@ -162,11 +162,51 @@ export class LoLStatusReader {
         const activePlayer = activePlayerResponse.data as any;
 
         if (activePlayer) {
+          this.logger.debug(
+            `Active player data: ${JSON.stringify(activePlayer, null, 2)}`
+          );
+          this.logger.debug(
+            `Active player keys: ${Object.keys(activePlayer).join(", ")}`
+          );
+
           status.activePlayerName =
             activePlayer.riotIdGameName || activePlayer.summonerName;
-          status.championName = activePlayer.championStats?.championName;
           status.level = activePlayer.level;
           status.currentGold = activePlayer.currentGold;
+
+          // Get champion name from player list since it's not in active player data
+          try {
+            const playerListResponse =
+              await this.api.liveclientdata.getLiveclientdataPlayerlist();
+            const playerList = playerListResponse.data as any[];
+
+            this.logger.debug(
+              `Player list data: ${JSON.stringify(playerList, null, 2)}`
+            );
+
+            // Find the active player in the list
+            const activePlayerInList = playerList.find(
+              (player) =>
+                player.riotIdGameName === status.activePlayerName ||
+                player.summonerName === status.activePlayerName
+            );
+
+            if (activePlayerInList) {
+              this.logger.debug(
+                `Found active player in list: ${JSON.stringify(
+                  activePlayerInList,
+                  null,
+                  2
+                )}`
+              );
+              status.championName = activePlayerInList.championName;
+              this.logger.debug(
+                `Champion name from player list: ${activePlayerInList.championName}`
+              );
+            }
+          } catch (playerListError) {
+            this.logger.debug("Could not fetch player list for champion name");
+          }
 
           // Extract score if available
           if (activePlayer.championStats) {
