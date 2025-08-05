@@ -92,40 +92,23 @@ export class MqttEmitter {
   }
   public publishBatteryData(batteryInfo: BatteryInfo): void {
     try {
-      // Battery Level
-      this.client.publish(
-        `${DISCOVERY_PREFIX}/sensor/${this.deviceId}/battery_level/state`,
-        JSON.stringify({ battery_level: batteryInfo.batteryLevel })
-      );
+      // Publish all battery data to a single topic - sensors will extract values using value_template
+      const batteryData = {
+        battery_level: batteryInfo.batteryLevel,
+        is_charging: batteryInfo.isCharging ? "ON" : "OFF",
+        time_remaining_to_empty: batteryInfo.timeRemainingToEmpty,
+        time_remaining_to_full: batteryInfo.timeRemainingToFull,
+        ac_power: batteryInfo.powerSource === "AC" ? "ON" : "OFF",
+        power_source: batteryInfo.powerSource,
+        cycle_count: batteryInfo.cycleCount,
+        condition: batteryInfo.condition,
+      };
 
-      // Battery Charging
+      // Single MQTT publish for all battery data
       this.client.publish(
-        `${DISCOVERY_PREFIX}/binary_sensor/${this.deviceId}/battery_charging/state`,
-        JSON.stringify({ is_charging: batteryInfo.isCharging ? "ON" : "OFF" })
-      );
-
-      // Time Remaining to Empty (when discharging)
-      this.client.publish(
-        `${DISCOVERY_PREFIX}/sensor/${this.deviceId}/time_remaining_to_empty/state`,
-        JSON.stringify({
-          time_remaining_to_empty: batteryInfo.timeRemainingToEmpty,
-        })
-      );
-
-      // Time Remaining to Full (when charging)
-      this.client.publish(
-        `${DISCOVERY_PREFIX}/sensor/${this.deviceId}/time_remaining_to_full/state`,
-        JSON.stringify({
-          time_remaining_to_full: batteryInfo.timeRemainingToFull,
-        })
-      );
-
-      // AC Power (derived from power source)
-      this.client.publish(
-        `${DISCOVERY_PREFIX}/binary_sensor/${this.deviceId}/ac_power/state`,
-        JSON.stringify({
-          ac_power: batteryInfo.powerSource === "AC" ? "ON" : "OFF",
-        })
+        `${DISCOVERY_PREFIX}/sensor/${this.deviceId}/battery_status/state`,
+        JSON.stringify(batteryData),
+        { qos: 1, retain: true }
       );
     } catch (error) {
       this.logger.error(`Error publishing battery data: ${error}`);
@@ -148,42 +131,25 @@ export class MqttEmitter {
     detailedDisplayInfo: any[]
   ): void {
     try {
-      // Display Status
+      // Publish all display data to a single topic - sensors will extract values using value_template
+      const displayData = {
+        status: displayInfo.status,
+        external_display_count: displayInfo.externalDisplayCount,
+        builtin_display_online: displayInfo.builtinDisplayOnline ? "ON" : "OFF",
+        total_displays: detailedDisplayInfo.length,
+        displays: detailedDisplayInfo,
+        summary: {
+          external_count: displayInfo.externalDisplayCount,
+          builtin_online: displayInfo.builtinDisplayOnline,
+          status: displayInfo.status,
+        },
+      };
+
+      // Single MQTT publish for all display data
       this.client.publish(
         `${DISCOVERY_PREFIX}/sensor/${this.deviceId}/display_status/state`,
-        JSON.stringify({ status: displayInfo.status })
-      );
-
-      // External Display Count
-      this.client.publish(
-        `${DISCOVERY_PREFIX}/sensor/${this.deviceId}/external_display_count/state`,
-        JSON.stringify({
-          external_display_count: displayInfo.externalDisplayCount,
-        })
-      );
-
-      // Built-in Display Online
-      this.client.publish(
-        `${DISCOVERY_PREFIX}/binary_sensor/${this.deviceId}/builtin_display_online/state`,
-        JSON.stringify({
-          builtin_display_online: displayInfo.builtinDisplayOnline
-            ? "ON"
-            : "OFF",
-        })
-      );
-
-      // Detailed Display Information
-      this.client.publish(
-        `${DISCOVERY_PREFIX}/sensor/${this.deviceId}/display_info/state`,
-        JSON.stringify({
-          total_displays: detailedDisplayInfo.length,
-          displays: detailedDisplayInfo,
-          summary: {
-            external_count: displayInfo.externalDisplayCount,
-            builtin_online: displayInfo.builtinDisplayOnline,
-            status: displayInfo.status,
-          },
-        })
+        JSON.stringify(displayData),
+        { qos: 1, retain: true }
       );
     } catch (error) {
       this.logger.error(`Error publishing display data: ${error}`);
@@ -256,11 +222,14 @@ export class MqttEmitter {
       sw_version: `${this.config.version} (macOS ${require("os").release()})`,
     };
 
+    // Battery Sensors - All use single topic with value_template for efficiency
+    const batteryStatusTopic = `${DISCOVERY_PREFIX}/sensor/${this.deviceId}/battery_status/state`;
+
     // Battery Level Sensor
     const batteryLevelConfig = {
       name: "Battery Level",
       unique_id: `${this.deviceId}_battery_level`,
-      state_topic: `${DISCOVERY_PREFIX}/sensor/${this.deviceId}/battery_level/state`,
+      state_topic: batteryStatusTopic,
       device_class: "battery",
       unit_of_measurement: "%",
       value_template: "{{ value_json.battery_level }}",
@@ -271,10 +240,8 @@ export class MqttEmitter {
     const batteryChargingConfig = {
       name: "Battery Charging",
       unique_id: `${this.deviceId}_battery_charging`,
-      state_topic: `${DISCOVERY_PREFIX}/binary_sensor/${this.deviceId}/battery_charging/state`,
+      state_topic: batteryStatusTopic,
       device_class: "battery_charging",
-      payload_on: "ON",
-      payload_off: "OFF",
       value_template: "{{ value_json.is_charging }}",
       device: deviceConfig,
     };
@@ -283,10 +250,8 @@ export class MqttEmitter {
     const acPowerConfig = {
       name: "AC Power",
       unique_id: `${this.deviceId}_ac_power`,
-      state_topic: `${DISCOVERY_PREFIX}/binary_sensor/${this.deviceId}/ac_power/state`,
+      state_topic: batteryStatusTopic,
       device_class: "plug",
-      payload_on: "ON",
-      payload_off: "OFF",
       value_template: "{{ value_json.ac_power }}",
       device: deviceConfig,
     };
@@ -295,7 +260,7 @@ export class MqttEmitter {
     const timeRemainingToEmptyConfig = {
       name: "Battery Time Remaining to Empty",
       unique_id: `${this.deviceId}_time_remaining_to_empty`,
-      state_topic: `${DISCOVERY_PREFIX}/sensor/${this.deviceId}/time_remaining_to_empty/state`,
+      state_topic: batteryStatusTopic,
       unit_of_measurement: "min",
       value_template: "{{ value_json.time_remaining_to_empty }}",
       icon: "mdi:battery-clock",
@@ -308,7 +273,7 @@ export class MqttEmitter {
     const timeRemainingToFullConfig = {
       name: "Battery Time Remaining to Full",
       unique_id: `${this.deviceId}_time_remaining_to_full`,
-      state_topic: `${DISCOVERY_PREFIX}/sensor/${this.deviceId}/time_remaining_to_full/state`,
+      state_topic: batteryStatusTopic,
       unit_of_measurement: "min",
       value_template: "{{ value_json.time_remaining_to_full }}",
       icon: "mdi:battery-charging",
@@ -327,11 +292,14 @@ export class MqttEmitter {
       device: deviceConfig,
     };
 
+    // Display Sensors - All use single topic with value_template for efficiency
+    const displayStatusTopic = `${DISCOVERY_PREFIX}/sensor/${this.deviceId}/display_status/state`;
+
     // Display Status Sensor
     const displayStatusConfig = {
       name: "Display Status",
       unique_id: `${this.deviceId}_display_status`,
-      state_topic: `${DISCOVERY_PREFIX}/sensor/${this.deviceId}/display_status/state`,
+      state_topic: displayStatusTopic,
       value_template: "{{ value_json.status }}",
       device: deviceConfig,
     };
@@ -340,7 +308,7 @@ export class MqttEmitter {
     const externalDisplayCountConfig = {
       name: "External Display Count",
       unique_id: `${this.deviceId}_external_display_count`,
-      state_topic: `${DISCOVERY_PREFIX}/sensor/${this.deviceId}/external_display_count/state`,
+      state_topic: displayStatusTopic,
       unit_of_measurement: "displays",
       value_template: "{{ value_json.external_display_count }}",
       device: deviceConfig,
@@ -350,10 +318,8 @@ export class MqttEmitter {
     const builtinDisplayOnlineConfig = {
       name: "Built-in Display Online",
       unique_id: `${this.deviceId}_builtin_display_online`,
-      state_topic: `${DISCOVERY_PREFIX}/binary_sensor/${this.deviceId}/builtin_display_online/state`,
+      state_topic: displayStatusTopic,
       device_class: "connectivity",
-      payload_on: "ON",
-      payload_off: "OFF",
       value_template: "{{ value_json.builtin_display_online }}",
       device: deviceConfig,
     };
@@ -362,10 +328,10 @@ export class MqttEmitter {
     const displayInfoConfig = {
       name: "Display Information",
       unique_id: `${this.deviceId}_display_info`,
-      state_topic: `${DISCOVERY_PREFIX}/sensor/${this.deviceId}/display_info/state`,
+      state_topic: displayStatusTopic,
       unit_of_measurement: "displays",
       value_template: "{{ value_json.total_displays }}",
-      json_attributes_topic: `${DISCOVERY_PREFIX}/sensor/${this.deviceId}/display_info/state`,
+      json_attributes_topic: displayStatusTopic,
       device: deviceConfig,
     };
 

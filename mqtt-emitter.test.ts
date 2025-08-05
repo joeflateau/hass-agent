@@ -101,7 +101,7 @@ describe("MqttEmitter", () => {
   });
 
   describe("publishBatteryData", () => {
-    it("should publish battery data to correct topics", () => {
+    it("should publish battery data to single topic with all data", () => {
       const batteryInfo: BatteryInfo = {
         batteryLevel: 85,
         isCharging: true,
@@ -115,28 +115,18 @@ describe("MqttEmitter", () => {
       emitter.publishBatteryData(batteryInfo);
 
       expect(mockMqttClient.publish).toHaveBeenCalledWith(
-        "homeassistant/sensor/test-device/battery_level/state",
-        JSON.stringify({ battery_level: 85 })
-      );
-
-      expect(mockMqttClient.publish).toHaveBeenCalledWith(
-        "homeassistant/binary_sensor/test-device/battery_charging/state",
-        JSON.stringify({ is_charging: "ON" })
-      );
-
-      expect(mockMqttClient.publish).toHaveBeenCalledWith(
-        "homeassistant/sensor/test-device/time_remaining_to_empty/state",
-        JSON.stringify({ time_remaining_to_empty: -1 })
-      );
-
-      expect(mockMqttClient.publish).toHaveBeenCalledWith(
-        "homeassistant/sensor/test-device/time_remaining_to_full/state",
-        JSON.stringify({ time_remaining_to_full: 120 })
-      );
-
-      expect(mockMqttClient.publish).toHaveBeenCalledWith(
-        "homeassistant/binary_sensor/test-device/ac_power/state",
-        JSON.stringify({ ac_power: "ON" })
+        "homeassistant/sensor/test-device/battery_status/state",
+        JSON.stringify({
+          battery_level: 85,
+          is_charging: "ON",
+          time_remaining_to_empty: -1,
+          time_remaining_to_full: 120,
+          ac_power: "ON",
+          power_source: "AC",
+          cycle_count: 100,
+          condition: "Normal",
+        }),
+        { qos: 1, retain: true }
       );
     });
 
@@ -154,13 +144,18 @@ describe("MqttEmitter", () => {
       emitter.publishBatteryData(batteryInfo);
 
       expect(mockMqttClient.publish).toHaveBeenCalledWith(
-        "homeassistant/binary_sensor/test-device/battery_charging/state",
-        JSON.stringify({ is_charging: "OFF" })
-      );
-
-      expect(mockMqttClient.publish).toHaveBeenCalledWith(
-        "homeassistant/binary_sensor/test-device/ac_power/state",
-        JSON.stringify({ ac_power: "OFF" })
+        "homeassistant/sensor/test-device/battery_status/state",
+        JSON.stringify({
+          battery_level: 50,
+          is_charging: "OFF",
+          time_remaining_to_empty: 240,
+          time_remaining_to_full: -1,
+          ac_power: "OFF",
+          power_source: "Battery",
+          cycle_count: 100,
+          condition: "Normal",
+        }),
+        { qos: 1, retain: true }
       );
     });
   });
@@ -181,7 +176,7 @@ describe("MqttEmitter", () => {
   });
 
   describe("publishDisplayData", () => {
-    it("should publish display data to correct topics", () => {
+    it("should publish display data to single topic with all data", () => {
       const displayInfo: DisplayInfo = {
         status: "external",
         externalDisplayCount: 1,
@@ -202,22 +197,10 @@ describe("MqttEmitter", () => {
 
       expect(mockMqttClient.publish).toHaveBeenCalledWith(
         "homeassistant/sensor/test-device/display_status/state",
-        JSON.stringify({ status: "external" })
-      );
-
-      expect(mockMqttClient.publish).toHaveBeenCalledWith(
-        "homeassistant/sensor/test-device/external_display_count/state",
-        JSON.stringify({ external_display_count: 1 })
-      );
-
-      expect(mockMqttClient.publish).toHaveBeenCalledWith(
-        "homeassistant/binary_sensor/test-device/builtin_display_online/state",
-        JSON.stringify({ builtin_display_online: "ON" })
-      );
-
-      expect(mockMqttClient.publish).toHaveBeenCalledWith(
-        "homeassistant/sensor/test-device/display_info/state",
         JSON.stringify({
+          status: "external",
+          external_display_count: 1,
+          builtin_display_online: "ON",
           total_displays: 1,
           displays: detailedDisplayInfo,
           summary: {
@@ -225,7 +208,8 @@ describe("MqttEmitter", () => {
             builtin_online: true,
             status: "external",
           },
-        })
+        }),
+        { qos: 1, retain: true }
       );
     });
 
@@ -239,8 +223,20 @@ describe("MqttEmitter", () => {
       emitter.publishDisplayData(displayInfo, []);
 
       expect(mockMqttClient.publish).toHaveBeenCalledWith(
-        "homeassistant/binary_sensor/test-device/builtin_display_online/state",
-        JSON.stringify({ builtin_display_online: "OFF" })
+        "homeassistant/sensor/test-device/display_status/state",
+        JSON.stringify({
+          status: "off",
+          external_display_count: 0,
+          builtin_display_online: "OFF",
+          total_displays: 0,
+          displays: [],
+          summary: {
+            external_count: 0,
+            builtin_online: false,
+            status: "off",
+          },
+        }),
+        { qos: 1, retain: true }
       );
     });
   });
