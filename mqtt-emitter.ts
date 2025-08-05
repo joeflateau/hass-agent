@@ -450,6 +450,8 @@ export class MqttEmitter {
       name: "LoL Gold",
       unique_id: `${this.deviceId}_lol_gold`,
       state_topic: `${DISCOVERY_PREFIX}/sensor/${this.deviceId}/lol_gold/state`,
+      unit_of_measurement: "gold",
+      state_class: "measurement",
       icon: "mdi:currency-usd",
       device: deviceConfig,
     };
