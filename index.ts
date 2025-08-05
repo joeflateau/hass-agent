@@ -9,6 +9,7 @@ import {
   DisplayStatusReader,
   type DisplayInfo,
 } from "./display-status-reader.ts";
+import { LoLStatusReader } from "./lol-status-reader.ts";
 import { MqttEmitter, type MqttConfig } from "./mqtt-emitter.ts";
 
 // Configure Winston logger with timestamps
@@ -97,6 +98,7 @@ class MacOSPowerAgent {
   private periodicTimer?: NodeJS.Timeout;
   private displayReader: DisplayStatusReader;
   private batteryReader: BatteryStatusReader;
+  private lolStatusReader: LoLStatusReader;
   private mqttEmitter: MqttEmitter;
   private autoUpdater: AutoUpdater;
   private isShuttingDown = false;
@@ -107,6 +109,8 @@ class MacOSPowerAgent {
 
     // Initialize readers and emitter
     this.displayReader = new DisplayStatusReader(logger);
+    this.batteryReader = new BatteryStatusReader(logger);
+    this.lolStatusReader = new LoLStatusReader(logger);
     this.batteryReader = new BatteryStatusReader(logger);
 
     const mqttConfig: MqttConfig = {
@@ -133,6 +137,11 @@ class MacOSPowerAgent {
     // Set up battery update callback
     this.batteryReader.setBatteryUpdateCallback((batteryInfo) => {
       this.mqttEmitter.publishBatteryData(batteryInfo);
+    });
+
+    // Set up LoL status update callback
+    this.lolStatusReader.setStatusUpdateCallback((lolStatus) => {
+      this.mqttEmitter.publishLoLGameStatus(lolStatus);
     });
   }
 
@@ -174,6 +183,9 @@ class MacOSPowerAgent {
     // Start pmset rawlog monitoring for real-time battery updates
     this.batteryReader.startPmsetRawlogMonitoring();
 
+    // Start LoL status monitoring
+    this.lolStatusReader.startMonitoring();
+
     // Initial sensor data publish
     this.publishSensorData();
 
@@ -186,7 +198,7 @@ class MacOSPowerAgent {
     this.autoUpdater.start();
 
     this.logger.info(
-      `Started monitoring with real-time battery updates and ${this.config.UPDATE_INTERVAL}ms uptime/display updates`
+      `Started monitoring with real-time battery updates, LoL status monitoring, and ${this.config.UPDATE_INTERVAL}ms uptime/display updates`
     );
   }
 
@@ -210,6 +222,9 @@ class MacOSPowerAgent {
 
     // Stop pmset rawlog process first
     this.batteryReader.stopPmsetRawlogMonitoring();
+
+    // Stop LoL status monitoring
+    this.lolStatusReader.stopMonitoring();
 
     // Disconnect MQTT last (this will handle cleanup)
     try {

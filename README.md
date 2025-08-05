@@ -6,8 +6,10 @@ A TypeScript/Bun single file executable that monitors macOS power and battery st
 
 - 🔋 **Battery Monitoring**: Level, charging status, time remaining, cycle count, and condition
 - ⚡ **Power Source Detection**: AC power, battery power, and UPS status
+- 🖥️ **Display Status**: External display count, built-in display status
+- 🎮 **League of Legends Integration**: Real-time in-game status tracking via Game Client API
 - 🏠 **Home Assistant Integration**: Automatic device discovery via MQTT
-- 📊 **Real-time Updates**: Configurable update intervals
+- 📊 **Real-time Updates**: Configurable update intervals with adaptive polling
 - 🖥️ **macOS Native**: Uses system commands (`pmset`, `system_profiler`)
 - 📦 **Single Executable**: Compiled to a single binary file
 - 🔄 **Graceful Shutdown**: Proper cleanup on termination signals
@@ -245,6 +247,21 @@ The agent automatically registers the following entities in Home Assistant:
   - Device Class: `battery`
 - **Battery Time Remaining** (`sensor.macos_system_battery_time_remaining`)
   - Unit: `min`
+- **Uptime** (`sensor.macos_system_uptime`)
+  - Unit: `min`
+- **Display Status** (`sensor.macos_system_display_status`)
+- **External Display Count** (`sensor.macos_system_external_display_count`)
+- **LoL Game Mode** (`sensor.macos_system_lol_game_mode`)
+- **LoL Game Time** (`sensor.macos_system_lol_game_time`)
+  - Unit: `seconds`
+- **LoL Champion** (`sensor.macos_system_lol_champion`)
+- **LoL Level** (`sensor.macos_system_lol_level`)
+- **LoL Gold** (`sensor.macos_system_lol_gold`)
+- **LoL Kills** (`sensor.macos_system_lol_kills`)
+- **LoL Deaths** (`sensor.macos_system_lol_deaths`)
+- **LoL Assists** (`sensor.macos_system_lol_assists`)
+- **LoL Game Info** (`sensor.macos_system_lol_game_info`)
+  - JSON attributes with detailed game information
 
 ### Binary Sensors
 
@@ -252,14 +269,49 @@ The agent automatically registers the following entities in Home Assistant:
   - Device Class: `battery_charging`
 - **AC Power** (`binary_sensor.macos_system_ac_power`)
   - Device Class: `plug`
+- **Built-in Display Online** (`binary_sensor.macos_system_builtin_display_online`)
+  - Device Class: `connectivity`
+- **LoL In Game** (`binary_sensor.macos_system_lol_in_game`)
+  - Device Class: `connectivity`
+  - Shows whether League of Legends is currently running
+
+## League of Legends Integration
+
+The agent automatically monitors League of Legends Game Client API (https://127.0.0.1:2999) when available:
+
+### Features
+
+- **Adaptive Polling**:
+  - 30 seconds when not in-game (API offline)
+  - 1-5 seconds when in-game for real-time updates
+- **Game Status**: Tracks if you're currently in a game
+- **Match Details**: Game mode, map, game time
+- **Player Stats**: Champion, level, gold, K/D/A
+- **No Configuration Required**: Works automatically when League of Legends is running
+
+### Supported Game Data
+
+- Game mode (Classic, ARAM, etc.)
+- Map name and ID
+- Game time in seconds
+- Active player information
+- Champion name and statistics
+- Current level and gold
+- Kill/Death/Assist scores
+- Team assignment
+
+> **Note**: The League of Legends Game Client API is only available when you're in an active game. When not in-game, the API is offline, and the agent will show "not in game" status - this is expected behavior.
 
 ## System Commands Used
 
-The agent uses these macOS system commands:
+The agent uses these macOS system commands and APIs:
 
 - `pmset -g batt` - Battery status and power source
 - `pmset -g ps` - Power source details
 - `system_profiler SPPowerDataType` - Battery health information
+- `system_profiler SPDisplaysDataType` - Display configuration
+- `scutil --get ComputerName` - System hostname
+- **League of Legends Game Client API** (https://127.0.0.1:2999) - Real-time game data
 
 ## Troubleshooting
 

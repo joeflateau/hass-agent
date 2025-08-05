@@ -3,6 +3,7 @@ import * as winston from "winston";
 import { type BatteryInfo } from "./battery-parser.ts";
 import { type UptimeInfo } from "./battery-status-reader.ts";
 import { type DisplayInfo } from "./display-status-reader.ts";
+import { type LoLGameStatus } from "./lol-status-reader.ts";
 
 export interface MqttConfig {
   broker: string;
@@ -189,6 +190,102 @@ export class MqttEmitter {
     }
   }
 
+  public publishLoLGameStatus(lolStatus: LoLGameStatus): void {
+    try {
+      // Publish in-game status
+      this.client.publish(
+        `${DISCOVERY_PREFIX}/binary_sensor/${this.deviceId}/lol_in_game/state`,
+        lolStatus.isInGame ? "ON" : "OFF",
+        { qos: 1, retain: true }
+      );
+
+      if (lolStatus.isInGame) {
+        // Publish game mode
+        if (lolStatus.gameMode) {
+          this.client.publish(
+            `${DISCOVERY_PREFIX}/sensor/${this.deviceId}/lol_game_mode/state`,
+            lolStatus.gameMode,
+            { qos: 1, retain: true }
+          );
+        }
+
+        // Publish game time
+        if (lolStatus.gameTime !== undefined) {
+          this.client.publish(
+            `${DISCOVERY_PREFIX}/sensor/${this.deviceId}/lol_game_time/state`,
+            Math.round(lolStatus.gameTime).toString(),
+            { qos: 1, retain: true }
+          );
+        }
+
+        // Publish champion name
+        if (lolStatus.championName) {
+          this.client.publish(
+            `${DISCOVERY_PREFIX}/sensor/${this.deviceId}/lol_champion/state`,
+            lolStatus.championName,
+            { qos: 1, retain: true }
+          );
+        }
+
+        // Publish level
+        if (lolStatus.level !== undefined) {
+          this.client.publish(
+            `${DISCOVERY_PREFIX}/sensor/${this.deviceId}/lol_level/state`,
+            lolStatus.level.toString(),
+            { qos: 1, retain: true }
+          );
+        }
+
+        // Publish current gold
+        if (lolStatus.currentGold !== undefined) {
+          this.client.publish(
+            `${DISCOVERY_PREFIX}/sensor/${this.deviceId}/lol_gold/state`,
+            lolStatus.currentGold.toString(),
+            { qos: 1, retain: true }
+          );
+        }
+
+        // Publish K/D/A if available
+        if (lolStatus.score) {
+          this.client.publish(
+            `${DISCOVERY_PREFIX}/sensor/${this.deviceId}/lol_kills/state`,
+            lolStatus.score.kills.toString(),
+            { qos: 1, retain: true }
+          );
+          this.client.publish(
+            `${DISCOVERY_PREFIX}/sensor/${this.deviceId}/lol_deaths/state`,
+            lolStatus.score.deaths.toString(),
+            { qos: 1, retain: true }
+          );
+          this.client.publish(
+            `${DISCOVERY_PREFIX}/sensor/${this.deviceId}/lol_assists/state`,
+            lolStatus.score.assists.toString(),
+            { qos: 1, retain: true }
+          );
+        }
+
+        // Publish detailed game info as JSON
+        this.client.publish(
+          `${DISCOVERY_PREFIX}/sensor/${this.deviceId}/lol_game_info/state`,
+          JSON.stringify({
+            gameTime: lolStatus.gameTime,
+            gameMode: lolStatus.gameMode,
+            mapName: lolStatus.mapName,
+            mapId: lolStatus.mapId,
+            activePlayerName: lolStatus.activePlayerName,
+            championName: lolStatus.championName,
+            level: lolStatus.level,
+            currentGold: lolStatus.currentGold,
+            score: lolStatus.score,
+            team: lolStatus.team,
+          })
+        );
+      }
+    } catch (error) {
+      this.logger.error(`Error publishing LoL game status: ${error}`);
+    }
+  }
+
   private setupMqttClient(): void {
     this.client.on("connect", () => {
       this.logger.info("Connected to MQTT broker");
@@ -334,6 +431,93 @@ export class MqttEmitter {
       device: deviceConfig,
     };
 
+    // League of Legends Sensors
+    const lolInGameConfig = {
+      name: "LoL In Game",
+      unique_id: `${this.deviceId}_lol_in_game`,
+      state_topic: `${DISCOVERY_PREFIX}/binary_sensor/${this.deviceId}/lol_in_game/state`,
+      device_class: "connectivity",
+      payload_on: "ON",
+      payload_off: "OFF",
+      icon: "mdi:gamepad-variant",
+      device: deviceConfig,
+    };
+
+    const lolGameModeConfig = {
+      name: "LoL Game Mode",
+      unique_id: `${this.deviceId}_lol_game_mode`,
+      state_topic: `${DISCOVERY_PREFIX}/sensor/${this.deviceId}/lol_game_mode/state`,
+      icon: "mdi:gamepad-variant",
+      device: deviceConfig,
+    };
+
+    const lolGameTimeConfig = {
+      name: "LoL Game Time",
+      unique_id: `${this.deviceId}_lol_game_time`,
+      state_topic: `${DISCOVERY_PREFIX}/sensor/${this.deviceId}/lol_game_time/state`,
+      unit_of_measurement: "seconds",
+      icon: "mdi:timer-outline",
+      device: deviceConfig,
+    };
+
+    const lolChampionConfig = {
+      name: "LoL Champion",
+      unique_id: `${this.deviceId}_lol_champion`,
+      state_topic: `${DISCOVERY_PREFIX}/sensor/${this.deviceId}/lol_champion/state`,
+      icon: "mdi:account-warrior",
+      device: deviceConfig,
+    };
+
+    const lolLevelConfig = {
+      name: "LoL Level",
+      unique_id: `${this.deviceId}_lol_level`,
+      state_topic: `${DISCOVERY_PREFIX}/sensor/${this.deviceId}/lol_level/state`,
+      icon: "mdi:trophy",
+      device: deviceConfig,
+    };
+
+    const lolGoldConfig = {
+      name: "LoL Gold",
+      unique_id: `${this.deviceId}_lol_gold`,
+      state_topic: `${DISCOVERY_PREFIX}/sensor/${this.deviceId}/lol_gold/state`,
+      icon: "mdi:currency-usd",
+      device: deviceConfig,
+    };
+
+    const lolKillsConfig = {
+      name: "LoL Kills",
+      unique_id: `${this.deviceId}_lol_kills`,
+      state_topic: `${DISCOVERY_PREFIX}/sensor/${this.deviceId}/lol_kills/state`,
+      icon: "mdi:sword",
+      device: deviceConfig,
+    };
+
+    const lolDeathsConfig = {
+      name: "LoL Deaths",
+      unique_id: `${this.deviceId}_lol_deaths`,
+      state_topic: `${DISCOVERY_PREFIX}/sensor/${this.deviceId}/lol_deaths/state`,
+      icon: "mdi:skull",
+      device: deviceConfig,
+    };
+
+    const lolAssistsConfig = {
+      name: "LoL Assists",
+      unique_id: `${this.deviceId}_lol_assists`,
+      state_topic: `${DISCOVERY_PREFIX}/sensor/${this.deviceId}/lol_assists/state`,
+      icon: "mdi:account-multiple",
+      device: deviceConfig,
+    };
+
+    const lolGameInfoConfig = {
+      name: "LoL Game Info",
+      unique_id: `${this.deviceId}_lol_game_info`,
+      state_topic: `${DISCOVERY_PREFIX}/sensor/${this.deviceId}/lol_game_info/state`,
+      value_template: "{{ value_json.gameMode }}",
+      json_attributes_topic: `${DISCOVERY_PREFIX}/sensor/${this.deviceId}/lol_game_info/state`,
+      icon: "mdi:information",
+      device: deviceConfig,
+    };
+
     // Publish discovery configs
     this.client.publish(
       `${DISCOVERY_PREFIX}/sensor/${this.deviceId}/battery_level/config`,
@@ -386,6 +570,58 @@ export class MqttEmitter {
     this.client.publish(
       `${DISCOVERY_PREFIX}/sensor/${this.deviceId}/display_info/config`,
       JSON.stringify(displayInfoConfig),
+      { retain: true }
+    );
+
+    // Publish LoL discovery configs
+    this.client.publish(
+      `${DISCOVERY_PREFIX}/binary_sensor/${this.deviceId}/lol_in_game/config`,
+      JSON.stringify(lolInGameConfig),
+      { retain: true }
+    );
+    this.client.publish(
+      `${DISCOVERY_PREFIX}/sensor/${this.deviceId}/lol_game_mode/config`,
+      JSON.stringify(lolGameModeConfig),
+      { retain: true }
+    );
+    this.client.publish(
+      `${DISCOVERY_PREFIX}/sensor/${this.deviceId}/lol_game_time/config`,
+      JSON.stringify(lolGameTimeConfig),
+      { retain: true }
+    );
+    this.client.publish(
+      `${DISCOVERY_PREFIX}/sensor/${this.deviceId}/lol_champion/config`,
+      JSON.stringify(lolChampionConfig),
+      { retain: true }
+    );
+    this.client.publish(
+      `${DISCOVERY_PREFIX}/sensor/${this.deviceId}/lol_level/config`,
+      JSON.stringify(lolLevelConfig),
+      { retain: true }
+    );
+    this.client.publish(
+      `${DISCOVERY_PREFIX}/sensor/${this.deviceId}/lol_gold/config`,
+      JSON.stringify(lolGoldConfig),
+      { retain: true }
+    );
+    this.client.publish(
+      `${DISCOVERY_PREFIX}/sensor/${this.deviceId}/lol_kills/config`,
+      JSON.stringify(lolKillsConfig),
+      { retain: true }
+    );
+    this.client.publish(
+      `${DISCOVERY_PREFIX}/sensor/${this.deviceId}/lol_deaths/config`,
+      JSON.stringify(lolDeathsConfig),
+      { retain: true }
+    );
+    this.client.publish(
+      `${DISCOVERY_PREFIX}/sensor/${this.deviceId}/lol_assists/config`,
+      JSON.stringify(lolAssistsConfig),
+      { retain: true }
+    );
+    this.client.publish(
+      `${DISCOVERY_PREFIX}/sensor/${this.deviceId}/lol_game_info/config`,
+      JSON.stringify(lolGameInfoConfig),
       { retain: true }
     );
 

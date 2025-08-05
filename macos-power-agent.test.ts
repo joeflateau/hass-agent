@@ -32,17 +32,26 @@ const mockBatteryReader = {
   stopPmsetRawlogMonitoring: mock(),
 };
 
+const mockLoLStatusReader = {
+  getGameStatus: mock(),
+  setStatusUpdateCallback: mock(),
+  startMonitoring: mock(),
+  stopMonitoring: mock(),
+};
+
 const mockMqttEmitter = {
   connect: mock(),
   disconnect: mock(),
   publishBatteryData: mock(),
   publishUptimeData: mock(),
   publishDisplayData: mock(),
+  publishLoLGameStatus: mock(),
 };
 
 // Mock the imported class constructors
 const mockDisplayStatusReader = mock(() => mockDisplayReader);
 const mockBatteryStatusReader = mock(() => mockBatteryReader);
+const mockLoLStatusReaderClass = mock(() => mockLoLStatusReader);
 const mockMqttEmitterClass = mock(() => mockMqttEmitter);
 
 // Import after mocking
@@ -60,6 +69,10 @@ describe("MacOSPowerAgent", () => {
 
     mock.module("./battery-status-reader.ts", () => ({
       BatteryStatusReader: mockBatteryStatusReader,
+    }));
+
+    mock.module("./lol-status-reader.ts", () => ({
+      LoLStatusReader: mockLoLStatusReaderClass,
     }));
 
     mock.module("./mqtt-emitter.ts", () => ({
@@ -97,6 +110,7 @@ describe("MacOSPowerAgent", () => {
     // Clear all mocks after each test to prevent interference
     mockDisplayStatusReader.mockClear();
     mockBatteryStatusReader.mockClear();
+    mockLoLStatusReaderClass.mockClear();
     mockMqttEmitterClass.mockClear();
     mockDisplayReader.getDisplayStatus.mockClear();
     mockDisplayReader.getDetailedDisplayInfo.mockClear();
@@ -104,17 +118,23 @@ describe("MacOSPowerAgent", () => {
     mockBatteryReader.setBatteryUpdateCallback.mockClear();
     mockBatteryReader.startPmsetRawlogMonitoring.mockClear();
     mockBatteryReader.stopPmsetRawlogMonitoring.mockClear();
+    mockLoLStatusReader.getGameStatus.mockClear();
+    mockLoLStatusReader.setStatusUpdateCallback.mockClear();
+    mockLoLStatusReader.startMonitoring.mockClear();
+    mockLoLStatusReader.stopMonitoring.mockClear();
     mockMqttEmitter.connect.mockClear();
     mockMqttEmitter.disconnect.mockClear();
     mockMqttEmitter.publishBatteryData.mockClear();
     mockMqttEmitter.publishUptimeData.mockClear();
     mockMqttEmitter.publishDisplayData.mockClear();
+    mockMqttEmitter.publishLoLGameStatus.mockClear();
   });
 
   describe("constructor", () => {
     it("should initialize readers and emitter", () => {
       expect(mockDisplayStatusReader).toHaveBeenCalledWith(mockLogger);
       expect(mockBatteryStatusReader).toHaveBeenCalledWith(mockLogger);
+      expect(mockLoLStatusReaderClass).toHaveBeenCalledWith(mockLogger);
       expect(mockMqttEmitterClass).toHaveBeenCalledWith(
         {
           broker: config.MQTT_BROKER,
@@ -132,6 +152,9 @@ describe("MacOSPowerAgent", () => {
       expect(mockBatteryReader.setBatteryUpdateCallback).toHaveBeenCalledWith(
         expect.any(Function)
       );
+      expect(mockLoLStatusReader.setStatusUpdateCallback).toHaveBeenCalledWith(
+        expect.any(Function)
+      );
     });
   });
 
@@ -143,6 +166,7 @@ describe("MacOSPowerAgent", () => {
 
       expect(mockMqttEmitter.connect).toHaveBeenCalled();
       expect(mockBatteryReader.startPmsetRawlogMonitoring).toHaveBeenCalled();
+      expect(mockLoLStatusReader.startMonitoring).toHaveBeenCalled();
     });
   });
 
@@ -221,6 +245,7 @@ describe("MacOSPowerAgent", () => {
       await agent.shutdown();
 
       expect(mockBatteryReader.stopPmsetRawlogMonitoring).toHaveBeenCalled();
+      expect(mockLoLStatusReader.stopMonitoring).toHaveBeenCalled();
       expect(mockMqttEmitter.disconnect).toHaveBeenCalled();
       expect(mockLogger.info).toHaveBeenCalledWith("Shutting down...");
     });
