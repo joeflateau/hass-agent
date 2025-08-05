@@ -32,8 +32,25 @@ export class LoLStatusReader {
   constructor(logger: winston.Logger) {
     this.logger = logger;
 
+    // Create custom fetch that ignores SSL certificate errors for the LoL client's self-signed cert
+    const customFetch = async (
+      url: string | URL | Request,
+      init?: RequestInit
+    ) => {
+      const options: RequestInit = {
+        ...init,
+        // In Bun, we can set the tls option to ignore certificate errors
+        // @ts-ignore - Bun-specific TLS option
+        tls: {
+          rejectUnauthorized: false,
+        },
+      };
+      return fetch(url, options);
+    };
+
     this.api = new Api({
       baseUrl: "https://127.0.0.1:2999",
+      customFetch: customFetch as typeof fetch,
     });
   }
 
