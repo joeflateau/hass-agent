@@ -375,6 +375,7 @@ export class MqttEmitter {
       name: "External Display Count",
       unique_id: `${this.deviceId}_external_display_count`,
       state_topic: `${DISCOVERY_PREFIX}/sensor/${this.deviceId}/external_display_count/state`,
+      unit_of_measurement: "displays",
       value_template: "{{ value_json.external_display_count }}",
       device: deviceConfig,
     };
@@ -396,6 +397,7 @@ export class MqttEmitter {
       name: "Display Information",
       unique_id: `${this.deviceId}_display_info`,
       state_topic: `${DISCOVERY_PREFIX}/sensor/${this.deviceId}/display_info/state`,
+      unit_of_measurement: "displays",
       value_template: "{{ value_json.total_displays }}",
       json_attributes_topic: `${DISCOVERY_PREFIX}/sensor/${this.deviceId}/display_info/state`,
       device: deviceConfig,
@@ -442,6 +444,7 @@ export class MqttEmitter {
       name: "LoL Level",
       unique_id: `${this.deviceId}_lol_level`,
       state_topic: `${DISCOVERY_PREFIX}/sensor/${this.deviceId}/lol_level/state`,
+      unit_of_measurement: "level",
       icon: "mdi:trophy",
       device: deviceConfig,
     };
@@ -460,6 +463,7 @@ export class MqttEmitter {
       name: "LoL Kills",
       unique_id: `${this.deviceId}_lol_kills`,
       state_topic: `${DISCOVERY_PREFIX}/sensor/${this.deviceId}/lol_kills/state`,
+      unit_of_measurement: "kills",
       icon: "mdi:sword",
       device: deviceConfig,
     };
@@ -468,6 +472,7 @@ export class MqttEmitter {
       name: "LoL Deaths",
       unique_id: `${this.deviceId}_lol_deaths`,
       state_topic: `${DISCOVERY_PREFIX}/sensor/${this.deviceId}/lol_deaths/state`,
+      unit_of_measurement: "deaths",
       icon: "mdi:skull",
       device: deviceConfig,
     };
@@ -476,6 +481,7 @@ export class MqttEmitter {
       name: "LoL Assists",
       unique_id: `${this.deviceId}_lol_assists`,
       state_topic: `${DISCOVERY_PREFIX}/sensor/${this.deviceId}/lol_assists/state`,
+      unit_of_measurement: "assists",
       icon: "mdi:account-multiple",
       device: deviceConfig,
     };
