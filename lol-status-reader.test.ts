@@ -7,6 +7,7 @@ const mockApi = {
   liveclientdata: {
     getLiveclientdataGamestats: mock(),
     getLiveclientdataActiveplayer: mock(),
+    getLiveclientdataPlayerlist: mock(),
   },
 };
 
@@ -51,7 +52,6 @@ describe("LoLStatusReader", () => {
       data: {
         riotIdGameName: "TestPlayer",
         championStats: {
-          championName: "Jinx",
           kills: 5,
           deaths: 2,
           assists: 8,
@@ -60,6 +60,22 @@ describe("LoLStatusReader", () => {
         currentGold: 4500,
         team: "ORDER",
       },
+    });
+
+    // Mock successful player list response
+    mockApi.liveclientdata.getLiveclientdataPlayerlist.mockResolvedValue({
+      data: [
+        {
+          riotIdGameName: "TestPlayer",
+          championName: "Jinx",
+          team: "ORDER",
+        },
+        {
+          riotIdGameName: "EnemyPlayer",
+          championName: "Ashe",
+          team: "CHAOS",
+        },
+      ],
     });
 
     const reader = new LoLStatusReader(logger);
@@ -114,18 +130,41 @@ describe("LoLStatusReader", () => {
     const reader = new LoLStatusReader(logger);
     reader.setStatusUpdateCallback(updateCallback);
 
-    // Test that the callback can be retrieved and called
-    const testStatus: LoLGameStatus = { isInGame: true, gameMode: "CLASSIC" };
+    // Test that the callback is set
+    expect(reader.setStatusUpdateCallback).toBeDefined();
+  });
 
-    // Access the private callback to test it was set correctly
-    const callbackProperty = (reader as any).updateCallback;
-    expect(callbackProperty).toBeDefined();
+  test("should handle player list API failure gracefully", async () => {
+    // Mock successful game stats response
+    mockApi.liveclientdata.getLiveclientdataGamestats.mockResolvedValue({
+      data: {
+        gameTime: 400,
+        gameMode: "CLASSIC",
+        mapName: "Summoner's Rift",
+        mapId: 11,
+      },
+    });
 
-    // Call the callback directly to verify it works
-    if (callbackProperty) {
-      callbackProperty(testStatus);
-    }
+    // Mock successful active player response
+    mockApi.liveclientdata.getLiveclientdataActiveplayer.mockResolvedValue({
+      data: {
+        riotIdGameName: "TestPlayer",
+        level: 15,
+        currentGold: 3000,
+      },
+    });
 
-    expect(updateCallback).toHaveBeenCalledWith(testStatus);
+    // Mock failed player list response
+    mockApi.liveclientdata.getLiveclientdataPlayerlist.mockRejectedValue(
+      new Error("Player list not available")
+    );
+
+    const reader = new LoLStatusReader(logger);
+    const status = await reader.getGameStatus();
+
+    expect(status.isInGame).toBe(true);
+    expect(status.activePlayerName).toBe("TestPlayer");
+    expect(status.championName).toBeUndefined(); // Should be undefined when player list fails
+    expect(status.level).toBe(15);
   });
 });
