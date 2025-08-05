@@ -283,6 +283,80 @@ describe("MqttEmitter", () => {
     });
   });
 
+  describe("publishLoLGameStatus", () => {
+    it("should publish LoL game status to single topic with all data", () => {
+      const lolStatus = {
+        isInGame: true,
+        gameTime: 600.5,
+        gameMode: "CLASSIC",
+        mapName: "Summoner's Rift",
+        mapId: 11,
+        activePlayerName: "TestPlayer",
+        championName: "Jinx",
+        level: 12,
+        currentGold: 2500,
+        score: { kills: 5, deaths: 2, assists: 8 },
+        team: "BLUE",
+      };
+
+      emitter.publishLoLGameStatus(lolStatus);
+
+      expect(mockMqttClient.publish).toHaveBeenCalledWith(
+        "homeassistant/sensor/test-device/lol_status/state",
+        JSON.stringify({
+          isInGame: true,
+          gameTime: 601, // Should be rounded
+          gameMode: "CLASSIC",
+          mapName: "Summoner's Rift",
+          mapId: 11,
+          activePlayerName: "TestPlayer",
+          championName: "Jinx",
+          level: 12,
+          currentGold: 2500,
+          score: { kills: 5, deaths: 2, assists: 8 },
+          team: "BLUE",
+        }),
+        { qos: 1, retain: true }
+      );
+    });
+
+    it("should handle LoL status when not in game", () => {
+      const lolStatus = {
+        isInGame: false,
+        gameTime: undefined,
+        gameMode: undefined,
+        mapName: undefined,
+        mapId: undefined,
+        activePlayerName: undefined,
+        championName: undefined,
+        level: undefined,
+        currentGold: undefined,
+        score: undefined,
+        team: undefined,
+      };
+
+      emitter.publishLoLGameStatus(lolStatus);
+
+      expect(mockMqttClient.publish).toHaveBeenCalledWith(
+        "homeassistant/sensor/test-device/lol_status/state",
+        JSON.stringify({
+          isInGame: false,
+          gameTime: null,
+          gameMode: undefined,
+          mapName: undefined,
+          mapId: undefined,
+          activePlayerName: undefined,
+          championName: undefined,
+          level: undefined,
+          currentGold: undefined,
+          score: { kills: null, deaths: null, assists: null },
+          team: undefined,
+        }),
+        { qos: 1, retain: true }
+      );
+    });
+  });
+
   describe("error handling", () => {
     it("should handle publish errors gracefully", () => {
       const batteryInfo: BatteryInfo = {

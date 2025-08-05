@@ -196,60 +196,26 @@ export class MqttEmitter {
         `Publishing LoL status: ${JSON.stringify(lolStatus, null, 2)}`
       );
 
-      // Publish in-game status
-      this.client.publish(
-        `${DISCOVERY_PREFIX}/binary_sensor/${this.deviceId}/lol_in_game/state`,
-        lolStatus.isInGame ? "ON" : "OFF",
-        { qos: 1, retain: true }
-      );
-
-      // Helper function to publish LoL sensor data
-      const publishLoLSensor = (
-        sensor: string,
-        value: string | number | null | undefined
-      ) => {
-        this.client.publish(
-          `${DISCOVERY_PREFIX}/sensor/${this.deviceId}/lol_${sensor}/state`,
-          value?.toString() ?? "null",
-          { qos: 1, retain: true }
-        );
+      // Publish all LoL data to a single topic - sensors will extract values using value_template
+      const lolData = {
+        isInGame: lolStatus.isInGame,
+        gameTime: lolStatus.gameTime ? Math.round(lolStatus.gameTime) : null,
+        gameMode: lolStatus.gameMode,
+        mapName: lolStatus.mapName,
+        mapId: lolStatus.mapId,
+        activePlayerName: lolStatus.activePlayerName,
+        championName: lolStatus.championName,
+        level: lolStatus.level,
+        currentGold: lolStatus.currentGold,
+        score: lolStatus.score || { kills: null, deaths: null, assists: null },
+        team: lolStatus.team,
       };
 
-      // Always publish all sensor data - values will be null when not in game
-      publishLoLSensor("game_mode", lolStatus.gameMode);
-      publishLoLSensor(
-        "game_time",
-        lolStatus.gameTime ? Math.round(lolStatus.gameTime) : null
-      );
-
-      if (lolStatus.championName) {
-        this.logger.debug(
-          `Publishing champion name: ${lolStatus.championName}`
-        );
-      }
-      publishLoLSensor("champion", lolStatus.championName);
-
-      publishLoLSensor("level", lolStatus.level);
-      publishLoLSensor("gold", lolStatus.currentGold);
-      publishLoLSensor("kills", lolStatus.score?.kills);
-      publishLoLSensor("deaths", lolStatus.score?.deaths);
-      publishLoLSensor("assists", lolStatus.score?.assists);
-
-      // Publish detailed game info as JSON
-      publishLoLSensor(
-        "game_info",
-        JSON.stringify({
-          gameTime: lolStatus.gameTime,
-          gameMode: lolStatus.gameMode,
-          mapName: lolStatus.mapName,
-          mapId: lolStatus.mapId,
-          activePlayerName: lolStatus.activePlayerName,
-          championName: lolStatus.championName,
-          level: lolStatus.level,
-          currentGold: lolStatus.currentGold,
-          score: lolStatus.score,
-          team: lolStatus.team,
-        })
+      // Single MQTT publish for all LoL data
+      this.client.publish(
+        `${DISCOVERY_PREFIX}/sensor/${this.deviceId}/lol_status/state`,
+        JSON.stringify(lolData),
+        { qos: 1, retain: true }
       );
     } catch (error) {
       this.logger.error(`Error publishing LoL game status: ${error}`);
@@ -403,14 +369,15 @@ export class MqttEmitter {
       device: deviceConfig,
     };
 
-    // League of Legends Sensors
+    // League of Legends Sensors - All use single topic with value_template for efficiency
+    const lolStatusTopic = `${DISCOVERY_PREFIX}/sensor/${this.deviceId}/lol_status/state`;
+
     const lolInGameConfig = {
       name: "LoL In Game",
       unique_id: `${this.deviceId}_lol_in_game`,
-      state_topic: `${DISCOVERY_PREFIX}/binary_sensor/${this.deviceId}/lol_in_game/state`,
+      state_topic: lolStatusTopic,
       device_class: "connectivity",
-      payload_on: "ON",
-      payload_off: "OFF",
+      value_template: "{{ 'ON' if value_json.isInGame else 'OFF' }}",
       icon: "mdi:gamepad-variant",
       device: deviceConfig,
     };
@@ -418,7 +385,8 @@ export class MqttEmitter {
     const lolGameModeConfig = {
       name: "LoL Game Mode",
       unique_id: `${this.deviceId}_lol_game_mode`,
-      state_topic: `${DISCOVERY_PREFIX}/sensor/${this.deviceId}/lol_game_mode/state`,
+      state_topic: lolStatusTopic,
+      value_template: "{{ value_json.gameMode | default('unavailable') }}",
       icon: "mdi:gamepad-variant",
       device: deviceConfig,
     };
@@ -426,8 +394,9 @@ export class MqttEmitter {
     const lolGameTimeConfig = {
       name: "LoL Game Time",
       unique_id: `${this.deviceId}_lol_game_time`,
-      state_topic: `${DISCOVERY_PREFIX}/sensor/${this.deviceId}/lol_game_time/state`,
+      state_topic: lolStatusTopic,
       unit_of_measurement: "seconds",
+      value_template: "{{ value_json.gameTime | default('unavailable') }}",
       icon: "mdi:timer-outline",
       device: deviceConfig,
     };
@@ -435,7 +404,8 @@ export class MqttEmitter {
     const lolChampionConfig = {
       name: "LoL Champion",
       unique_id: `${this.deviceId}_lol_champion`,
-      state_topic: `${DISCOVERY_PREFIX}/sensor/${this.deviceId}/lol_champion/state`,
+      state_topic: lolStatusTopic,
+      value_template: "{{ value_json.championName | default('unavailable') }}",
       icon: "mdi:account-warrior",
       device: deviceConfig,
     };
@@ -443,8 +413,9 @@ export class MqttEmitter {
     const lolLevelConfig = {
       name: "LoL Level",
       unique_id: `${this.deviceId}_lol_level`,
-      state_topic: `${DISCOVERY_PREFIX}/sensor/${this.deviceId}/lol_level/state`,
+      state_topic: lolStatusTopic,
       unit_of_measurement: "level",
+      value_template: "{{ value_json.level | default('unavailable') }}",
       icon: "mdi:trophy",
       device: deviceConfig,
     };
@@ -452,9 +423,10 @@ export class MqttEmitter {
     const lolGoldConfig = {
       name: "LoL Gold",
       unique_id: `${this.deviceId}_lol_gold`,
-      state_topic: `${DISCOVERY_PREFIX}/sensor/${this.deviceId}/lol_gold/state`,
+      state_topic: lolStatusTopic,
       unit_of_measurement: "gold",
       state_class: "measurement",
+      value_template: "{{ value_json.currentGold | default('unavailable') }}",
       icon: "mdi:currency-usd",
       device: deviceConfig,
     };
@@ -462,8 +434,9 @@ export class MqttEmitter {
     const lolKillsConfig = {
       name: "LoL Kills",
       unique_id: `${this.deviceId}_lol_kills`,
-      state_topic: `${DISCOVERY_PREFIX}/sensor/${this.deviceId}/lol_kills/state`,
+      state_topic: lolStatusTopic,
       unit_of_measurement: "kills",
+      value_template: "{{ value_json.score.kills | default('unavailable') }}",
       icon: "mdi:sword",
       device: deviceConfig,
     };
@@ -471,8 +444,9 @@ export class MqttEmitter {
     const lolDeathsConfig = {
       name: "LoL Deaths",
       unique_id: `${this.deviceId}_lol_deaths`,
-      state_topic: `${DISCOVERY_PREFIX}/sensor/${this.deviceId}/lol_deaths/state`,
+      state_topic: lolStatusTopic,
       unit_of_measurement: "deaths",
+      value_template: "{{ value_json.score.deaths | default('unavailable') }}",
       icon: "mdi:skull",
       device: deviceConfig,
     };
@@ -480,8 +454,9 @@ export class MqttEmitter {
     const lolAssistsConfig = {
       name: "LoL Assists",
       unique_id: `${this.deviceId}_lol_assists`,
-      state_topic: `${DISCOVERY_PREFIX}/sensor/${this.deviceId}/lol_assists/state`,
+      state_topic: lolStatusTopic,
       unit_of_measurement: "assists",
+      value_template: "{{ value_json.score.assists | default('unavailable') }}",
       icon: "mdi:account-multiple",
       device: deviceConfig,
     };
@@ -489,9 +464,9 @@ export class MqttEmitter {
     const lolGameInfoConfig = {
       name: "LoL Game Info",
       unique_id: `${this.deviceId}_lol_game_info`,
-      state_topic: `${DISCOVERY_PREFIX}/sensor/${this.deviceId}/lol_game_info/state`,
-      value_template: "{{ value_json.gameMode }}",
-      json_attributes_topic: `${DISCOVERY_PREFIX}/sensor/${this.deviceId}/lol_game_info/state`,
+      state_topic: lolStatusTopic,
+      value_template: "{{ value_json.gameMode | default('unavailable') }}",
+      json_attributes_topic: lolStatusTopic,
       icon: "mdi:information",
       device: deviceConfig,
     };
@@ -551,7 +526,7 @@ export class MqttEmitter {
       { retain: true }
     );
 
-    // Publish LoL discovery configs
+    // Publish LoL discovery configs - In Game is binary_sensor, others are regular sensors
     this.client.publish(
       `${DISCOVERY_PREFIX}/binary_sensor/${this.deviceId}/lol_in_game/config`,
       JSON.stringify(lolInGameConfig),
