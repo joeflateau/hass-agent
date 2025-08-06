@@ -392,7 +392,7 @@ export class MqttEmitter {
       state_topic: lolStatusTopic,
       unit_of_measurement: "gold",
       state_class: "measurement",
-      value_template: "{{ value_json.currentGold | default('unavailable') }}",
+      value_template: "{{ (value_json.currentGold | default(0)) | floor }}",
       icon: "mdi:currency-usd",
       device: deviceConfig,
     };
