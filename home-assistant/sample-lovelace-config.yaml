@@ -1,0 +1,96 @@
+# Sample Lovelace Dashboard Configuration
+# Add this to your Home Assistant dashboard
+
+# First, make sure to add the resource in your configuration.yaml:
+# lovelace:
+#   resources:
+#     - url: /local/lol-status-card.js
+#       type: module
+
+views:
+  - title: Gaming Dashboard
+    path: gaming
+    icon: mdi:gamepad-variant
+    cards:
+      # Main LoL Status Card
+      - type: custom:lol-status-card
+        entity: sensor.your_device_lol_game_info
+        title: "League of Legends"
+
+      # Alternative: Minimal configuration
+      - type: custom:lol-status-card
+        entity: sensor.your_device_lol_game_info
+
+      # You can also combine with other gaming-related cards
+      - type: entities
+        title: "Gaming System Status"
+        entities:
+          - entity: binary_sensor.your_device_lol_in_game
+            name: "In LoL Game"
+          - entity: sensor.your_device_lol_game_mode
+            name: "Game Mode"
+          - entity: sensor.your_device_lol_champion
+            name: "Champion"
+          - entity: sensor.your_device_lol_level
+            name: "Level"
+          - entity: sensor.your_device_lol_gold
+            name: "Gold"
+
+      # System monitoring alongside gaming
+      - type: entities
+        title: "System Performance"
+        entities:
+          - entity: sensor.your_device_battery_level
+            name: "Battery"
+          - entity: sensor.your_device_uptime
+            name: "Uptime"
+          - entity: sensor.your_device_display_status
+            name: "Display Status"
+
+# Alternative: Simple view focusing just on LoL
+  - title: LoL Monitor
+    path: lol-simple
+    icon: mdi:sword
+    cards:
+      - type: custom:lol-status-card
+        entity: sensor.your_device_lol_game_info
+        title: "Current Game Status"
+
+# Advanced: Multiple cards in a grid
+  - title: Gaming Grid
+    path: gaming-grid
+    icon: mdi:grid
+    cards:
+      - type: horizontal-stack
+        cards:
+          - type: custom:lol-status-card
+            entity: sensor.your_device_lol_game_info
+          - type: entities
+            title: "Quick Stats"
+            entities:
+              - sensor.your_device_lol_kills
+              - sensor.your_device_lol_deaths  
+              - sensor.your_device_lol_assists
+              - sensor.your_device_lol_game_time
+
+# You can also create automations based on LoL status:
+# automation:
+#   - alias: "LoL Game Started"
+#     trigger:
+#       platform: state
+#       entity_id: binary_sensor.your_device_lol_in_game
+#       to: 'on'
+#     action:
+#       service: notify.mobile_app_your_phone
+#       data:
+#         message: "LoL game started!"
+#
+#   - alias: "LoL Game Ended"  
+#     trigger:
+#       platform: state
+#       entity_id: binary_sensor.your_device_lol_in_game
+#       to: 'off'
+#     action:
+#       service: notify.mobile_app_your_phone
+#       data:
+#         message: "LoL game ended!"
