@@ -90,10 +90,31 @@ export class MqttEmitter {
       );
     });
   }
+
+  private publishState(
+    entityId: string,
+    data: any,
+    options: mqtt.IClientPublishOptions = { qos: 1, retain: true }
+  ): void {
+    const topic = `${DISCOVERY_PREFIX}/sensor/${this.deviceId}/${entityId}/state`;
+    this.client.publish(topic, JSON.stringify(data), options);
+  }
+
+  private publishDiscoveryConfig(
+    entityType: string,
+    entityId: string,
+    config: any
+  ): void {
+    this.client.publish(
+      `${DISCOVERY_PREFIX}/${entityType}/${this.deviceId}/${entityId}/config`,
+      JSON.stringify(config),
+      { retain: true }
+    );
+  }
   public publishBatteryData(batteryInfo: BatteryInfo): void {
     try {
       // Publish all battery data to a single topic - sensors will extract values using value_template
-      const batteryData = {
+      this.publishState("battery_status", {
         battery_level: batteryInfo.batteryLevel,
         is_charging: batteryInfo.isCharging ? "ON" : "OFF",
         time_remaining_to_empty: batteryInfo.timeRemainingToEmpty,
@@ -102,14 +123,7 @@ export class MqttEmitter {
         power_source: batteryInfo.powerSource,
         cycle_count: batteryInfo.cycleCount,
         condition: batteryInfo.condition,
-      };
-
-      // Single MQTT publish for all battery data
-      this.client.publish(
-        `${DISCOVERY_PREFIX}/sensor/${this.deviceId}/battery_status/state`,
-        JSON.stringify(batteryData),
-        { qos: 1, retain: true }
-      );
+      });
     } catch (error) {
       this.logger.error(`Error publishing battery data: ${error}`);
     }
@@ -117,10 +131,7 @@ export class MqttEmitter {
 
   public publishUptimeData(uptimeInfo: UptimeInfo): void {
     try {
-      this.client.publish(
-        `${DISCOVERY_PREFIX}/sensor/${this.deviceId}/uptime/state`,
-        JSON.stringify({ uptime: uptimeInfo.uptimeMinutes })
-      );
+      this.publishState("uptime", { uptime: uptimeInfo.uptimeMinutes });
     } catch (error) {
       this.logger.error(`Error publishing uptime data: ${error}`);
     }
@@ -132,7 +143,7 @@ export class MqttEmitter {
   ): void {
     try {
       // Publish all display data to a single topic - sensors will extract values using value_template
-      const displayData = {
+      this.publishState("display_status", {
         status: displayInfo.status,
         external_display_count: displayInfo.externalDisplayCount,
         builtin_display_online: displayInfo.builtinDisplayOnline ? "ON" : "OFF",
@@ -143,14 +154,7 @@ export class MqttEmitter {
           builtin_online: displayInfo.builtinDisplayOnline,
           status: displayInfo.status,
         },
-      };
-
-      // Single MQTT publish for all display data
-      this.client.publish(
-        `${DISCOVERY_PREFIX}/sensor/${this.deviceId}/display_status/state`,
-        JSON.stringify(displayData),
-        { qos: 1, retain: true }
-      );
+      });
     } catch (error) {
       this.logger.error(`Error publishing display data: ${error}`);
     }
@@ -163,7 +167,7 @@ export class MqttEmitter {
       );
 
       // Publish all LoL data to a single topic - sensors will extract values using value_template
-      const lolData = {
+      this.publishState("lol_status", {
         isInGame: lolStatus.isInGame,
         gameTime: lolStatus.gameTime ? Math.round(lolStatus.gameTime) : null,
         gameMode: lolStatus.gameMode,
@@ -175,14 +179,7 @@ export class MqttEmitter {
         currentGold: lolStatus.currentGold,
         score: lolStatus.score || { kills: null, deaths: null, assists: null },
         team: lolStatus.team,
-      };
-
-      // Single MQTT publish for all LoL data
-      this.client.publish(
-        `${DISCOVERY_PREFIX}/sensor/${this.deviceId}/lol_status/state`,
-        JSON.stringify(lolData),
-        { qos: 1, retain: true }
-      );
+      });
     } catch (error) {
       this.logger.error(`Error publishing LoL game status: ${error}`);
     }
@@ -225,8 +222,8 @@ export class MqttEmitter {
     // Battery Sensors - All use single topic with value_template for efficiency
     const batteryStatusTopic = `${DISCOVERY_PREFIX}/sensor/${this.deviceId}/battery_status/state`;
 
-    // Battery Level Sensor
-    const batteryLevelConfig = {
+    // Publish battery discovery configs
+    this.publishDiscoveryConfig("sensor", "battery_level", {
       name: "Battery Level",
       unique_id: `${this.deviceId}_battery_level`,
       state_topic: batteryStatusTopic,
@@ -234,30 +231,27 @@ export class MqttEmitter {
       unit_of_measurement: "%",
       value_template: "{{ value_json.battery_level }}",
       device: deviceConfig,
-    };
+    });
 
-    // Battery Charging Sensor
-    const batteryChargingConfig = {
+    this.publishDiscoveryConfig("binary_sensor", "battery_charging", {
       name: "Battery Charging",
       unique_id: `${this.deviceId}_battery_charging`,
       state_topic: batteryStatusTopic,
       device_class: "battery_charging",
       value_template: "{{ value_json.is_charging }}",
       device: deviceConfig,
-    };
+    });
 
-    // AC Power Sensor
-    const acPowerConfig = {
+    this.publishDiscoveryConfig("binary_sensor", "ac_power", {
       name: "AC Power",
       unique_id: `${this.deviceId}_ac_power`,
       state_topic: batteryStatusTopic,
       device_class: "plug",
       value_template: "{{ value_json.ac_power }}",
       device: deviceConfig,
-    };
+    });
 
-    // Battery Time Remaining to Empty Sensor
-    const timeRemainingToEmptyConfig = {
+    this.publishDiscoveryConfig("sensor", "time_remaining_to_empty", {
       name: "Battery Time Remaining to Empty",
       unique_id: `${this.deviceId}_time_remaining_to_empty`,
       state_topic: batteryStatusTopic,
@@ -267,10 +261,9 @@ export class MqttEmitter {
       entity_category: "diagnostic",
       enabled_by_default: true,
       device: deviceConfig,
-    };
+    });
 
-    // Battery Time Remaining to Full Sensor
-    const timeRemainingToFullConfig = {
+    this.publishDiscoveryConfig("sensor", "time_remaining_to_full", {
       name: "Battery Time Remaining to Full",
       unique_id: `${this.deviceId}_time_remaining_to_full`,
       state_topic: batteryStatusTopic,
@@ -280,52 +273,48 @@ export class MqttEmitter {
       entity_category: "diagnostic",
       enabled_by_default: true,
       device: deviceConfig,
-    };
+    });
 
     // Uptime Sensor
-    const uptimeConfig = {
+    this.publishDiscoveryConfig("sensor", "uptime", {
       name: "System Uptime",
       unique_id: `${this.deviceId}_uptime`,
       state_topic: `${DISCOVERY_PREFIX}/sensor/${this.deviceId}/uptime/state`,
       unit_of_measurement: "min",
       value_template: "{{ value_json.uptime }}",
       device: deviceConfig,
-    };
+    });
 
     // Display Sensors - All use single topic with value_template for efficiency
     const displayStatusTopic = `${DISCOVERY_PREFIX}/sensor/${this.deviceId}/display_status/state`;
 
-    // Display Status Sensor
-    const displayStatusConfig = {
+    this.publishDiscoveryConfig("sensor", "display_status", {
       name: "Display Status",
       unique_id: `${this.deviceId}_display_status`,
       state_topic: displayStatusTopic,
       value_template: "{{ value_json.status }}",
       device: deviceConfig,
-    };
+    });
 
-    // External Display Count Sensor
-    const externalDisplayCountConfig = {
+    this.publishDiscoveryConfig("sensor", "external_display_count", {
       name: "External Display Count",
       unique_id: `${this.deviceId}_external_display_count`,
       state_topic: displayStatusTopic,
       unit_of_measurement: "displays",
       value_template: "{{ value_json.external_display_count }}",
       device: deviceConfig,
-    };
+    });
 
-    // Built-in Display Online Sensor
-    const builtinDisplayOnlineConfig = {
+    this.publishDiscoveryConfig("binary_sensor", "builtin_display_online", {
       name: "Built-in Display Online",
       unique_id: `${this.deviceId}_builtin_display_online`,
       state_topic: displayStatusTopic,
       device_class: "connectivity",
       value_template: "{{ value_json.builtin_display_online }}",
       device: deviceConfig,
-    };
+    });
 
-    // Display Information Sensor (JSON attributes)
-    const displayInfoConfig = {
+    this.publishDiscoveryConfig("sensor", "display_info", {
       name: "Display Information",
       unique_id: `${this.deviceId}_display_info`,
       state_topic: displayStatusTopic,
@@ -333,12 +322,12 @@ export class MqttEmitter {
       value_template: "{{ value_json.total_displays }}",
       json_attributes_topic: displayStatusTopic,
       device: deviceConfig,
-    };
+    });
 
     // League of Legends Sensors - All use single topic with value_template for efficiency
     const lolStatusTopic = `${DISCOVERY_PREFIX}/sensor/${this.deviceId}/lol_status/state`;
 
-    const lolInGameConfig = {
+    this.publishDiscoveryConfig("binary_sensor", "lol_in_game", {
       name: "LoL In Game",
       unique_id: `${this.deviceId}_lol_in_game`,
       state_topic: lolStatusTopic,
@@ -346,18 +335,18 @@ export class MqttEmitter {
       value_template: "{{ 'ON' if value_json.isInGame else 'OFF' }}",
       icon: "mdi:gamepad-variant",
       device: deviceConfig,
-    };
+    });
 
-    const lolGameModeConfig = {
+    this.publishDiscoveryConfig("sensor", "lol_game_mode", {
       name: "LoL Game Mode",
       unique_id: `${this.deviceId}_lol_game_mode`,
       state_topic: lolStatusTopic,
       value_template: "{{ value_json.gameMode | default('unavailable') }}",
       icon: "mdi:gamepad-variant",
       device: deviceConfig,
-    };
+    });
 
-    const lolGameTimeConfig = {
+    this.publishDiscoveryConfig("sensor", "lol_game_time", {
       name: "LoL Game Time",
       unique_id: `${this.deviceId}_lol_game_time`,
       state_topic: lolStatusTopic,
@@ -365,18 +354,18 @@ export class MqttEmitter {
       value_template: "{{ value_json.gameTime | default('unavailable') }}",
       icon: "mdi:timer-outline",
       device: deviceConfig,
-    };
+    });
 
-    const lolChampionConfig = {
+    this.publishDiscoveryConfig("sensor", "lol_champion", {
       name: "LoL Champion",
       unique_id: `${this.deviceId}_lol_champion`,
       state_topic: lolStatusTopic,
       value_template: "{{ value_json.championName | default('unavailable') }}",
       icon: "mdi:account-warrior",
       device: deviceConfig,
-    };
+    });
 
-    const lolLevelConfig = {
+    this.publishDiscoveryConfig("sensor", "lol_level", {
       name: "LoL Level",
       unique_id: `${this.deviceId}_lol_level`,
       state_topic: lolStatusTopic,
@@ -384,9 +373,9 @@ export class MqttEmitter {
       value_template: "{{ value_json.level | default('unavailable') }}",
       icon: "mdi:trophy",
       device: deviceConfig,
-    };
+    });
 
-    const lolGoldConfig = {
+    this.publishDiscoveryConfig("sensor", "lol_gold", {
       name: "LoL Gold",
       unique_id: `${this.deviceId}_lol_gold`,
       state_topic: lolStatusTopic,
@@ -395,9 +384,9 @@ export class MqttEmitter {
       value_template: "{{ (value_json.currentGold | default(0)) | floor }}",
       icon: "mdi:currency-usd",
       device: deviceConfig,
-    };
+    });
 
-    const lolKillsConfig = {
+    this.publishDiscoveryConfig("sensor", "lol_kills", {
       name: "LoL Kills",
       unique_id: `${this.deviceId}_lol_kills`,
       state_topic: lolStatusTopic,
@@ -405,9 +394,9 @@ export class MqttEmitter {
       value_template: "{{ value_json.score.kills | default('unavailable') }}",
       icon: "mdi:sword",
       device: deviceConfig,
-    };
+    });
 
-    const lolDeathsConfig = {
+    this.publishDiscoveryConfig("sensor", "lol_deaths", {
       name: "LoL Deaths",
       unique_id: `${this.deviceId}_lol_deaths`,
       state_topic: lolStatusTopic,
@@ -415,9 +404,9 @@ export class MqttEmitter {
       value_template: "{{ value_json.score.deaths | default('unavailable') }}",
       icon: "mdi:skull",
       device: deviceConfig,
-    };
+    });
 
-    const lolAssistsConfig = {
+    this.publishDiscoveryConfig("sensor", "lol_assists", {
       name: "LoL Assists",
       unique_id: `${this.deviceId}_lol_assists`,
       state_topic: lolStatusTopic,
@@ -425,9 +414,9 @@ export class MqttEmitter {
       value_template: "{{ value_json.score.assists | default('unavailable') }}",
       icon: "mdi:account-multiple",
       device: deviceConfig,
-    };
+    });
 
-    const lolGameInfoConfig = {
+    this.publishDiscoveryConfig("sensor", "lol_game_info", {
       name: "LoL Game Info",
       unique_id: `${this.deviceId}_lol_game_info`,
       state_topic: lolStatusTopic,
@@ -435,114 +424,7 @@ export class MqttEmitter {
       json_attributes_topic: lolStatusTopic,
       icon: "mdi:information",
       device: deviceConfig,
-    };
-
-    // Publish discovery configs
-    this.client.publish(
-      `${DISCOVERY_PREFIX}/sensor/${this.deviceId}/battery_level/config`,
-      JSON.stringify(batteryLevelConfig),
-      { retain: true }
-    );
-    this.client.publish(
-      `${DISCOVERY_PREFIX}/binary_sensor/${this.deviceId}/battery_charging/config`,
-      JSON.stringify(batteryChargingConfig),
-      { retain: true }
-    );
-    this.client.publish(
-      `${DISCOVERY_PREFIX}/binary_sensor/${this.deviceId}/ac_power/config`,
-      JSON.stringify(acPowerConfig),
-      { retain: true }
-    );
-    this.client.publish(
-      `${DISCOVERY_PREFIX}/sensor/${this.deviceId}/time_remaining_to_empty/config`,
-      JSON.stringify(timeRemainingToEmptyConfig),
-      { retain: true }
-    );
-    this.client.publish(
-      `${DISCOVERY_PREFIX}/sensor/${this.deviceId}/time_remaining_to_full/config`,
-      JSON.stringify(timeRemainingToFullConfig),
-      { retain: true }
-    );
-
-    this.client.publish(
-      `${DISCOVERY_PREFIX}/sensor/${this.deviceId}/uptime/config`,
-      JSON.stringify(uptimeConfig),
-      { retain: true }
-    );
-
-    this.client.publish(
-      `${DISCOVERY_PREFIX}/sensor/${this.deviceId}/display_status/config`,
-      JSON.stringify(displayStatusConfig),
-      { retain: true }
-    );
-    this.client.publish(
-      `${DISCOVERY_PREFIX}/sensor/${this.deviceId}/external_display_count/config`,
-      JSON.stringify(externalDisplayCountConfig),
-      { retain: true }
-    );
-    this.client.publish(
-      `${DISCOVERY_PREFIX}/binary_sensor/${this.deviceId}/builtin_display_online/config`,
-      JSON.stringify(builtinDisplayOnlineConfig),
-      { retain: true }
-    );
-
-    this.client.publish(
-      `${DISCOVERY_PREFIX}/sensor/${this.deviceId}/display_info/config`,
-      JSON.stringify(displayInfoConfig),
-      { retain: true }
-    );
-
-    // Publish LoL discovery configs - In Game is binary_sensor, others are regular sensors
-    this.client.publish(
-      `${DISCOVERY_PREFIX}/binary_sensor/${this.deviceId}/lol_in_game/config`,
-      JSON.stringify(lolInGameConfig),
-      { retain: true }
-    );
-    this.client.publish(
-      `${DISCOVERY_PREFIX}/sensor/${this.deviceId}/lol_game_mode/config`,
-      JSON.stringify(lolGameModeConfig),
-      { retain: true }
-    );
-    this.client.publish(
-      `${DISCOVERY_PREFIX}/sensor/${this.deviceId}/lol_game_time/config`,
-      JSON.stringify(lolGameTimeConfig),
-      { retain: true }
-    );
-    this.client.publish(
-      `${DISCOVERY_PREFIX}/sensor/${this.deviceId}/lol_champion/config`,
-      JSON.stringify(lolChampionConfig),
-      { retain: true }
-    );
-    this.client.publish(
-      `${DISCOVERY_PREFIX}/sensor/${this.deviceId}/lol_level/config`,
-      JSON.stringify(lolLevelConfig),
-      { retain: true }
-    );
-    this.client.publish(
-      `${DISCOVERY_PREFIX}/sensor/${this.deviceId}/lol_gold/config`,
-      JSON.stringify(lolGoldConfig),
-      { retain: true }
-    );
-    this.client.publish(
-      `${DISCOVERY_PREFIX}/sensor/${this.deviceId}/lol_kills/config`,
-      JSON.stringify(lolKillsConfig),
-      { retain: true }
-    );
-    this.client.publish(
-      `${DISCOVERY_PREFIX}/sensor/${this.deviceId}/lol_deaths/config`,
-      JSON.stringify(lolDeathsConfig),
-      { retain: true }
-    );
-    this.client.publish(
-      `${DISCOVERY_PREFIX}/sensor/${this.deviceId}/lol_assists/config`,
-      JSON.stringify(lolAssistsConfig),
-      { retain: true }
-    );
-    this.client.publish(
-      `${DISCOVERY_PREFIX}/sensor/${this.deviceId}/lol_game_info/config`,
-      JSON.stringify(lolGameInfoConfig),
-      { retain: true }
-    );
+    });
 
     this.logger.info("Published Home Assistant discovery configurations");
   }
