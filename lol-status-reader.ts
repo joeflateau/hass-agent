@@ -135,6 +135,72 @@ const PlayerListPlayerSchema = z.object({
 
 const PlayerListSchema = z.array(PlayerListPlayerSchema);
 
+export interface PlayerInfo {
+  riotIdGameName?: string;
+  riotId?: string;
+  riotIdTagLine?: string;
+  summonerName?: string;
+  championName: string;
+  rawChampionName?: string;
+  skinName?: string;
+  rawSkinName?: string;
+  skinID?: number;
+  team: string;
+  level: number;
+  position?: string;
+  isBot: boolean;
+  isDead: boolean;
+  respawnTimer: number;
+  scores: {
+    kills: number;
+    deaths: number;
+    assists: number;
+    creepScore: number;
+    wardScore: number;
+  };
+  summonerSpells?: {
+    summonerSpellOne?: {
+      displayName: string;
+      rawDescription: string;
+    };
+    summonerSpellTwo?: {
+      displayName: string;
+      rawDescription: string;
+    };
+  };
+  items?: Array<{
+    canUse: boolean;
+    consumable: boolean;
+    count: number;
+    displayName: string;
+    itemID: number;
+    price: number;
+    rawDescription: string;
+    rawDisplayName?: string;
+    slot: number;
+  }>;
+  runes?: {
+    keystone: {
+      displayName: string;
+      id: number;
+      rawDescription: string;
+      rawDisplayName: string;
+    };
+    primaryRuneTree: {
+      displayName: string;
+      id: number;
+      rawDescription: string;
+      rawDisplayName: string;
+    };
+    secondaryRuneTree: {
+      displayName: string;
+      id: number;
+      rawDescription: string;
+      rawDisplayName: string;
+    };
+  };
+}
+
 export interface LoLGameStatus {
   isInGame: boolean;
   gameTime?: number;
@@ -163,6 +229,8 @@ export interface LoLGameStatus {
     wardScore: number;
   };
   team?: string;
+  teammates?: PlayerInfo[];
+  enemies?: PlayerInfo[];
   championStats?: {
     abilityHaste: number;
     abilityPower: number;
@@ -529,6 +597,53 @@ export class LoLStatusReader {
         status.runes = activePlayerInList.runes;
         this.logger.debug(
           `Runes: ${activePlayerInList.runes.keystone.displayName} (${activePlayerInList.runes.primaryRuneTree.displayName}/${activePlayerInList.runes.secondaryRuneTree.displayName})`
+        );
+
+        // Separate teammates and enemies based on active player's team
+        const activePlayerTeam = activePlayerInList.team;
+        status.teammates = [];
+        status.enemies = [];
+
+        playerList.forEach((player) => {
+          const playerInfo: PlayerInfo = {
+            riotIdGameName: player.riotIdGameName,
+            riotId: player.riotId,
+            riotIdTagLine: player.riotIdTagLine,
+            summonerName: player.summonerName,
+            championName: player.championName,
+            rawChampionName: player.rawChampionName,
+            skinName: player.skinName,
+            rawSkinName: player.rawSkinName,
+            skinID: player.skinID,
+            team: player.team,
+            level: player.level,
+            position: player.position,
+            isBot: player.isBot,
+            isDead: player.isDead,
+            respawnTimer: player.respawnTimer,
+            scores: {
+              kills: player.scores.kills,
+              deaths: player.scores.deaths,
+              assists: player.scores.assists,
+              creepScore: player.scores.creepScore,
+              wardScore: player.scores.wardScore,
+            },
+            summonerSpells: player.summonerSpells,
+            items: player.items.filter((item) => item.itemID !== 0),
+            runes: player.runes,
+          };
+
+          if (player.team === activePlayerTeam) {
+            status.teammates!.push(playerInfo);
+          } else {
+            status.enemies!.push(playerInfo);
+          }
+        });
+
+        this.logger.debug(
+          `Found ${status.teammates!.length} teammates and ${
+            status.enemies!.length
+          } enemies`
         );
 
         // Add active player specific data if available

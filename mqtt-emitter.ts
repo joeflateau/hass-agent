@@ -189,6 +189,8 @@ export class MqttEmitter {
         summonerSpells: lolStatus.summonerSpells || null,
         abilities: lolStatus.abilities || null,
         items: lolStatus.items || [],
+        teammates: lolStatus.teammates || [],
+        enemies: lolStatus.enemies || [],
       });
     } catch (error) {
       this.logger.error(`Error publishing LoL game status: ${error}`);

@@ -376,6 +376,8 @@ describe("MqttEmitter", () => {
               slot: 0,
             },
           ],
+          teammates: [],
+          enemies: [],
         }),
         { qos: 1, retain: true }
       );
@@ -414,6 +416,8 @@ describe("MqttEmitter", () => {
           summonerSpells: null,
           abilities: null,
           items: [],
+          teammates: [],
+          enemies: [],
         }),
         { qos: 1, retain: true }
       );

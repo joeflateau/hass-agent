@@ -63,6 +63,8 @@ class LoLStatusCard extends LitElement {
     const items = attributes.items || [];
     const abilities = attributes.abilities || {};
     const runes = attributes.runes || null;
+    const teammates = attributes.teammates || [];
+    const enemies = attributes.enemies || [];
 
     const cardTitle = this.config.title || "League of Legends Status";
     const showHeader = this.config.show_header !== false; // Default to true
@@ -411,6 +413,80 @@ class LoLStatusCard extends LitElement {
                                 ></div>`;
                           });
                         })()}
+                      </div>
+                    </div>
+                  `
+                : ""}
+              ${teammates.length > 0
+                ? html`
+                    <div class="players-section">
+                      <div class="team-section teammates">
+                        <div class="team-header">Team</div>
+                        <div class="players-grid">
+                          ${teammates.map(
+                            (player) => html`
+                              <div class="player-item">
+                                <div class="player-champion">
+                                  ${player.championName}
+                                </div>
+                                <div class="player-name">
+                                  ${player.riotIdGameName ||
+                                  player.summonerName ||
+                                  "Unknown"}
+                                </div>
+                                <div class="player-score">
+                                  ${player.scores.kills}/${player.scores
+                                    .deaths}/${player.scores.assists}
+                                </div>
+                                <div class="player-cs">
+                                  ${player.scores.creepScore} CS
+                                </div>
+                                ${player.isDead
+                                  ? html`<div class="player-status dead">
+                                      💀 ${player.respawnTimer}s
+                                    </div>`
+                                  : ""}
+                              </div>
+                            `
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  `
+                : ""}
+              ${enemies.length > 0
+                ? html`
+                    <div class="players-section">
+                      <div class="team-section enemies">
+                        <div class="team-header">Enemies</div>
+                        <div class="players-grid">
+                          ${enemies.map(
+                            (player) => html`
+                              <div class="player-item">
+                                <div class="player-champion">
+                                  ${player.championName}
+                                </div>
+                                <div class="player-name">
+                                  ${player.riotIdGameName ||
+                                  player.summonerName ||
+                                  "Unknown"}
+                                </div>
+                                <div class="player-score">
+                                  ${player.scores.kills}/${player.scores
+                                    .deaths}/${player.scores.assists}
+                                </div>
+                                <div class="player-cs">
+                                  ${player.scores.creepScore} CS
+                                </div>
+                                ${player.isDead
+                                  ? html`<div class="player-status dead">
+                                      💀 ${player.respawnTimer}s
+                                    </div>`
+                                  : ""}
+                              </div>
+                            `
+                          )}
+                        </div>
                       </div>
                     </div>
                   `
@@ -890,6 +966,88 @@ class LoLStatusCard extends LitElement {
         font-size: 0.7em;
         font-weight: 500;
         color: var(--primary-text-color);
+      }
+
+      /* Players section styles */
+      .players-section {
+        margin-bottom: 12px;
+      }
+      .team-section {
+        margin-bottom: 8px;
+        padding: 8px;
+        border-radius: 6px;
+        border: 1px solid var(--divider-color);
+      }
+      .team-section.teammates {
+        background-color: rgba(76, 175, 80, 0.1);
+        border-color: rgba(76, 175, 80, 0.3);
+      }
+      .team-section.enemies {
+        background-color: rgba(244, 67, 54, 0.1);
+        border-color: rgba(244, 67, 54, 0.3);
+      }
+      .team-header {
+        font-size: 0.8em;
+        font-weight: 600;
+        text-transform: uppercase;
+        text-align: center;
+        margin-bottom: 8px;
+        padding-bottom: 4px;
+        border-bottom: 1px solid var(--divider-color);
+        color: var(--primary-text-color);
+      }
+      .players-grid {
+        display: flex;
+        flex-direction: column;
+        gap: 4px;
+      }
+      .player-item {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: 4px 6px;
+        background-color: var(--card-background-color);
+        border-radius: 4px;
+        border: 1px solid var(--divider-color);
+        gap: 8px;
+      }
+      .player-champion {
+        font-size: 0.7em;
+        font-weight: 600;
+        color: var(--primary-text-color);
+        min-width: 60px;
+        flex-shrink: 0;
+      }
+      .player-name {
+        font-size: 0.65em;
+        color: var(--secondary-text-color);
+        flex: 1;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+      .player-score {
+        font-size: 0.65em;
+        font-weight: 500;
+        color: var(--primary-text-color);
+        min-width: 40px;
+        text-align: center;
+        flex-shrink: 0;
+      }
+      .player-cs {
+        font-size: 0.6em;
+        color: var(--secondary-text-color);
+        min-width: 35px;
+        text-align: center;
+        flex-shrink: 0;
+      }
+      .player-status.dead {
+        font-size: 0.6em;
+        color: #ff5722;
+        font-weight: 500;
+        min-width: 35px;
+        text-align: center;
+        flex-shrink: 0;
       }
     `;
   }
