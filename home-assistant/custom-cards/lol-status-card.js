@@ -48,6 +48,8 @@ class LoLStatusCard extends LitElement {
     const currentGold = attributes.currentGold || 0;
     const score = attributes.score || { kills: 0, deaths: 0, assists: 0 };
     const mapName = attributes.mapName || "N/A";
+    const summonerSpells = attributes.summonerSpells || {};
+    const items = attributes.items || [];
 
     const cardTitle = this.config.title || "League of Legends Status";
     const showHeader = this.config.show_header !== false; // Default to true
@@ -105,6 +107,34 @@ class LoLStatusCard extends LitElement {
                     </div>
                   `
                 : ""}
+              ${summonerSpells.summonerSpellOne ||
+              summonerSpells.summonerSpellTwo
+                ? html`
+                    <div class="summoner-spells">
+                      <div class="section-title">Summoner Spells</div>
+                      <div class="spells-container">
+                        ${summonerSpells.summonerSpellOne
+                          ? html`
+                              <div class="spell-item">
+                                <div class="spell-name">
+                                  ${summonerSpells.summonerSpellOne.displayName}
+                                </div>
+                              </div>
+                            `
+                          : ""}
+                        ${summonerSpells.summonerSpellTwo
+                          ? html`
+                              <div class="spell-item">
+                                <div class="spell-name">
+                                  ${summonerSpells.summonerSpellTwo.displayName}
+                                </div>
+                              </div>
+                            `
+                          : ""}
+                      </div>
+                    </div>
+                  `
+                : ""}
               ${currentGold > 0
                 ? html`
                     <div class="gold-info">
@@ -134,6 +164,33 @@ class LoLStatusCard extends LitElement {
                       <div class="score-item">
                         <div class="score-number assists">${score.assists}</div>
                         <div class="score-label">Assists</div>
+                      </div>
+                    </div>
+                  `
+                : ""}
+              ${items.length > 0
+                ? html`
+                    <div class="items-section">
+                      <div class="section-title">Items</div>
+                      <div class="items-grid">
+                        ${items.map(
+                          (item) => html`
+                            <div
+                              class="item-slot"
+                              title="${item.rawDescription}"
+                            >
+                              <div class="item-name">${item.displayName}</div>
+                              ${item.count > 1
+                                ? html`<div class="item-count">
+                                    x${item.count}
+                                  </div>`
+                                : ""}
+                            </div>
+                          `
+                        )}
+                        ${Array.from({
+                          length: Math.max(0, 6 - items.length),
+                        }).map(() => html`<div class="item-slot empty"></div>`)}
                       </div>
                     </div>
                   `
@@ -293,6 +350,103 @@ class LoLStatusCard extends LitElement {
         color: var(--error-color);
         text-align: center;
         padding: 16px;
+      }
+      .section-title {
+        font-size: 0.9em;
+        font-weight: 600;
+        color: var(--primary-text-color);
+        margin-bottom: 8px;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+      }
+      .summoner-spells {
+        margin-bottom: 16px;
+        padding: 12px;
+        background-color: var(--card-background-color);
+        border-radius: 8px;
+        border: 1px solid var(--divider-color);
+      }
+      .spells-container {
+        display: flex;
+        gap: 12px;
+        justify-content: center;
+      }
+      .spell-item {
+        flex: 1;
+        text-align: center;
+        padding: 8px;
+        background-color: rgba(103, 58, 183, 0.1);
+        border-radius: 6px;
+        border: 1px solid rgba(103, 58, 183, 0.3);
+      }
+      .spell-name {
+        font-size: 0.9em;
+        font-weight: 500;
+        color: #673ab7;
+      }
+      .items-section {
+        margin-bottom: 16px;
+        padding: 12px;
+        background-color: var(--card-background-color);
+        border-radius: 8px;
+        border: 1px solid var(--divider-color);
+      }
+      .items-grid {
+        display: grid;
+        grid-template-columns: repeat(3, 1fr);
+        gap: 8px;
+      }
+      .item-slot {
+        aspect-ratio: 1;
+        border-radius: 6px;
+        border: 2px solid var(--divider-color);
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        padding: 4px;
+        text-align: center;
+        position: relative;
+        background-color: var(--primary-background-color);
+        transition: all 0.2s ease;
+      }
+      .item-slot:hover {
+        border-color: var(--primary-color);
+        transform: translateY(-2px);
+        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+      }
+      .item-slot.empty {
+        background-color: var(--disabled-color);
+        opacity: 0.3;
+      }
+      .item-slot.empty:hover {
+        transform: none;
+        box-shadow: none;
+        border-color: var(--divider-color);
+      }
+      .item-name {
+        font-size: 0.7em;
+        font-weight: 500;
+        color: var(--primary-text-color);
+        line-height: 1.1;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        display: -webkit-box;
+        -webkit-line-clamp: 2;
+        -webkit-box-orient: vertical;
+      }
+      .item-count {
+        position: absolute;
+        bottom: 2px;
+        right: 2px;
+        background-color: var(--primary-color);
+        color: white;
+        font-size: 0.6em;
+        font-weight: bold;
+        padding: 1px 4px;
+        border-radius: 3px;
+        min-width: 12px;
+        text-align: center;
       }
     `;
   }

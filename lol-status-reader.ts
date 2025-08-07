@@ -17,6 +17,26 @@ export interface LoLGameStatus {
     assists: number;
   };
   team?: string;
+  summonerSpells?: {
+    summonerSpellOne?: {
+      displayName: string;
+      rawDescription: string;
+    };
+    summonerSpellTwo?: {
+      displayName: string;
+      rawDescription: string;
+    };
+  };
+  items?: Array<{
+    canUse: boolean;
+    consumable: boolean;
+    count: number;
+    displayName: string;
+    itemID: number;
+    price: number;
+    rawDescription: string;
+    slot: number;
+  }>;
 }
 
 export class LoLStatusReader {
@@ -184,6 +204,68 @@ export class LoLStatusReader {
             activePlayer.riotIdGameName || activePlayer.summonerName;
           status.level = activePlayer.level;
           status.currentGold = activePlayer.currentGold;
+
+          // Extract summoner spells
+          if (activePlayer.summonerSpells) {
+            status.summonerSpells = {
+              summonerSpellOne: activePlayer.summonerSpells.summonerSpellOne
+                ? {
+                    displayName:
+                      activePlayer.summonerSpells.summonerSpellOne.displayName,
+                    rawDescription:
+                      activePlayer.summonerSpells.summonerSpellOne
+                        .rawDescription,
+                  }
+                : undefined,
+              summonerSpellTwo: activePlayer.summonerSpells.summonerSpellTwo
+                ? {
+                    displayName:
+                      activePlayer.summonerSpells.summonerSpellTwo.displayName,
+                    rawDescription:
+                      activePlayer.summonerSpells.summonerSpellTwo
+                        .rawDescription,
+                  }
+                : undefined,
+            };
+            this.logger.debug(
+              `Summoner spells: ${activePlayer.summonerSpells.summonerSpellOne?.displayName} + ${activePlayer.summonerSpells.summonerSpellTwo?.displayName}`
+            );
+          }
+
+          // Extract items
+          try {
+            if (status.activePlayerName) {
+              // First try to get items from the dedicated items endpoint
+              const itemsResponse =
+                await this.api.liveclientdata.getLiveclientdataPlayeritems({
+                  riotId: status.activePlayerName,
+                });
+              const itemsData = itemsResponse.data as any[];
+
+              if (itemsData && Array.isArray(itemsData)) {
+                status.items = itemsData.filter(
+                  (item: any) => item.itemID !== 0
+                );
+                this.logger.debug(
+                  `Items from items endpoint: ${status.items
+                    ?.map((item) => item.displayName)
+                    .join(", ")}`
+                );
+              }
+            }
+          } catch (itemsError) {
+            // Fallback to items from active player data
+            if (activePlayer.items) {
+              status.items = activePlayer.items.filter(
+                (item: any) => item.itemID !== 0
+              );
+              this.logger.debug(
+                `Items from active player: ${status.items
+                  ?.map((item) => item.displayName)
+                  .join(", ")}`
+              );
+            }
+          }
 
           // Get champion name from player list since it's not in active player data
           try {

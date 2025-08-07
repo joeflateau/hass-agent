@@ -179,6 +179,8 @@ export class MqttEmitter {
         currentGold: lolStatus.currentGold,
         score: lolStatus.score || { kills: null, deaths: null, assists: null },
         team: lolStatus.team,
+        summonerSpells: lolStatus.summonerSpells || null,
+        items: lolStatus.items || [],
       });
     } catch (error) {
       this.logger.error(`Error publishing LoL game status: ${error}`);

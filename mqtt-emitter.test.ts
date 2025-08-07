@@ -170,7 +170,8 @@ describe("MqttEmitter", () => {
 
       expect(mockMqttClient.publish).toHaveBeenCalledWith(
         "homeassistant/sensor/test-device/uptime/state",
-        JSON.stringify({ uptime: 1440 })
+        JSON.stringify({ uptime: 1440 }),
+        { qos: 1, retain: true }
       );
     });
   });
@@ -293,6 +294,30 @@ describe("MqttEmitter", () => {
         currentGold: 2500,
         score: { kills: 5, deaths: 2, assists: 8 },
         team: "BLUE",
+        summonerSpells: {
+          summonerSpellOne: {
+            displayName: "Flash",
+            rawDescription:
+              "Teleports your champion a short distance toward your cursor's location.",
+          },
+          summonerSpellTwo: {
+            displayName: "Heal",
+            rawDescription:
+              "Restores Health to you and your most wounded nearby ally.",
+          },
+        },
+        items: [
+          {
+            canUse: false,
+            consumable: false,
+            count: 1,
+            displayName: "Doran's Blade",
+            itemID: 1055,
+            price: 450,
+            rawDescription: "+8 Attack Damage +80 Health +3% Life Steal",
+            slot: 0,
+          },
+        ],
       };
 
       emitter.publishLoLGameStatus(lolStatus);
@@ -311,6 +336,30 @@ describe("MqttEmitter", () => {
           currentGold: 2500,
           score: { kills: 5, deaths: 2, assists: 8 },
           team: "BLUE",
+          summonerSpells: {
+            summonerSpellOne: {
+              displayName: "Flash",
+              rawDescription:
+                "Teleports your champion a short distance toward your cursor's location.",
+            },
+            summonerSpellTwo: {
+              displayName: "Heal",
+              rawDescription:
+                "Restores Health to you and your most wounded nearby ally.",
+            },
+          },
+          items: [
+            {
+              canUse: false,
+              consumable: false,
+              count: 1,
+              displayName: "Doran's Blade",
+              itemID: 1055,
+              price: 450,
+              rawDescription: "+8 Attack Damage +80 Health +3% Life Steal",
+              slot: 0,
+            },
+          ],
         }),
         { qos: 1, retain: true }
       );
@@ -347,6 +396,8 @@ describe("MqttEmitter", () => {
           currentGold: undefined,
           score: { kills: null, deaths: null, assists: null },
           team: undefined,
+          summonerSpells: null,
+          items: [],
         }),
         { qos: 1, retain: true }
       );
