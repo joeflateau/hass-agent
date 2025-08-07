@@ -1,12 +1,116 @@
 import * as winston from "winston";
+import { z } from "zod";
 import { Api } from "./lol-client/Api.ts";
+
+// Zod schemas for API responses
+const GameStatsSchema = z.object({
+  gameTime: z.number(),
+  gameMode: z.string(),
+  mapName: z.string(),
+  mapNumber: z.number(),
+});
+
+const SummonerSpellSchema = z.object({
+  displayName: z.string(),
+  rawDescription: z.string().optional().default(""),
+});
+
+const SummonerSpellsSchema = z.object({
+  summonerSpellOne: SummonerSpellSchema.optional(),
+  summonerSpellTwo: SummonerSpellSchema.optional(),
+});
+
+const AbilitySchema = z.object({
+  abilityLevel: z.number().optional(),
+  displayName: z.string(),
+  rawDescription: z.string().optional().default(""),
+  rawDisplayName: z.string().optional().default(""),
+});
+
+const AbilitiesSchema = z
+  .record(z.enum(["Q", "W", "E", "R", "Passive"]), AbilitySchema)
+  .optional();
+
+const ItemSchema = z.object({
+  canUse: z.boolean(),
+  consumable: z.boolean(),
+  count: z.number(),
+  displayName: z.string(),
+  itemID: z.number(),
+  price: z.number(),
+  rawDescription: z.string(),
+  slot: z.number(),
+});
+
+const ChampionStatsSchema = z.object({
+  abilityHaste: z.number().optional().default(0),
+  abilityPower: z.number().optional().default(0),
+  armor: z.number().optional().default(0),
+  armorPenetrationFlat: z.number().optional().default(0),
+  armorPenetrationPercent: z.number().optional().default(0),
+  attackDamage: z.number().optional().default(0),
+  attackRange: z.number().optional().default(0),
+  attackSpeed: z.number().optional().default(0),
+  bonusArmorPenetrationPercent: z.number().optional().default(0),
+  bonusMagicPenetrationPercent: z.number().optional().default(0),
+  cooldownReduction: z.number().optional().default(0),
+  critChance: z.number().optional().default(0),
+  critDamage: z.number().optional().default(0),
+  currentHealth: z.number().optional().default(0),
+  healthRegenRate: z.number().optional().default(0),
+  lifeSteal: z.number().optional().default(0),
+  magicLethality: z.number().optional().default(0),
+  magicPenetrationFlat: z.number().optional().default(0),
+  magicPenetrationPercent: z.number().optional().default(0),
+  magicResist: z.number().optional().default(0),
+  maxHealth: z.number().optional().default(0),
+  moveSpeed: z.number().optional().default(0),
+  physicalLethality: z.number().optional().default(0),
+  resourceMax: z.number().optional().default(0),
+  resourceRegenRate: z.number().optional().default(0),
+  resourceType: z.string().optional().default(""),
+  resourceValue: z.number().optional().default(0),
+  spellVamp: z.number().optional().default(0),
+  tenacity: z.number().optional().default(0),
+});
+
+const ActivePlayerSchema = z
+  .object({
+    riotIdGameName: z.string().optional(),
+    summonerName: z.string().optional(),
+    level: z.number(),
+    currentGold: z.number(),
+    championStats: ChampionStatsSchema,
+    abilities: AbilitiesSchema,
+  })
+  .refine((data) => data.riotIdGameName || data.summonerName, {
+    message: "Either riotIdGameName or summonerName must be present",
+  });
+
+const ScoresSchema = z.object({
+  kills: z.number(),
+  deaths: z.number(),
+  assists: z.number(),
+});
+
+const PlayerListPlayerSchema = z.object({
+  riotIdGameName: z.string().optional(),
+  summonerName: z.string().optional(),
+  championName: z.string(),
+  team: z.string(),
+  scores: ScoresSchema,
+  summonerSpells: SummonerSpellsSchema,
+});
+
+const PlayerListSchema = z.array(PlayerListPlayerSchema);
+const ItemsSchema = z.array(ItemSchema);
 
 export interface LoLGameStatus {
   isInGame: boolean;
   gameTime?: number;
   gameMode?: string;
   mapName?: string;
-  mapId?: number;
+  mapNumber?: number;
   activePlayerName?: string;
   championName?: string;
   level?: number;
@@ -17,6 +121,37 @@ export interface LoLGameStatus {
     assists: number;
   };
   team?: string;
+  championStats?: {
+    abilityHaste: number;
+    abilityPower: number;
+    armor: number;
+    armorPenetrationFlat: number;
+    armorPenetrationPercent: number;
+    attackDamage: number;
+    attackRange: number;
+    attackSpeed: number;
+    bonusArmorPenetrationPercent: number;
+    bonusMagicPenetrationPercent: number;
+    cooldownReduction: number;
+    critChance: number;
+    critDamage: number;
+    currentHealth: number;
+    healthRegenRate: number;
+    lifeSteal: number;
+    magicLethality: number;
+    magicPenetrationFlat: number;
+    magicPenetrationPercent: number;
+    magicResist: number;
+    maxHealth: number;
+    moveSpeed: number;
+    physicalLethality: number;
+    resourceMax: number;
+    resourceRegenRate: number;
+    resourceType: string;
+    resourceValue: number;
+    spellVamp: number;
+    tenacity: number;
+  };
   summonerSpells?: {
     summonerSpellOne?: {
       displayName: string;
@@ -27,6 +162,15 @@ export interface LoLGameStatus {
       rawDescription: string;
     };
   };
+  abilities?: Record<
+    "Q" | "W" | "E" | "R" | "Passive",
+    {
+      abilityLevel?: number;
+      displayName: string;
+      rawDescription: string;
+      rawDisplayName: string;
+    }
+  >;
   items?: Array<{
     canUse: boolean;
     consumable: boolean;
@@ -72,6 +216,30 @@ export class LoLStatusReader {
       baseUrl: "https://127.0.0.1:2999",
       customFetch: customFetch as typeof fetch,
     });
+  }
+
+  /**
+   * Safely parse data with a Zod schema and log detailed error information on failure
+   */
+  private parseWithLogging<T>(
+    schema: z.ZodSchema<T>,
+    data: unknown,
+    dataType: string
+  ): T {
+    try {
+      return schema.parse(data);
+    } catch (parseError) {
+      this.logger.error(
+        `Failed to parse '${dataType}' response: ${parseError}`,
+        {
+          dataType,
+          rawData: data,
+          error: parseError,
+          rawDataString: JSON.stringify(data, null, 2),
+        }
+      );
+      throw parseError;
+    }
   }
 
   public setStatusUpdateCallback(
@@ -160,11 +328,12 @@ export class LoLStatusReader {
       // Try to get game stats first - this is the lightest endpoint
       const gameStatsResponse =
         await this.api.liveclientdata.getLiveclientdataGamestats();
-      const gameStats = gameStatsResponse.data as any;
 
-      if (!gameStats) {
-        return { isInGame: false };
-      }
+      const gameStats = this.parseWithLogging(
+        GameStatsSchema,
+        gameStatsResponse.data,
+        "game stats"
+      );
 
       // If we have game stats, we're definitely in a game
       let status: LoLGameStatus = {
@@ -172,148 +341,160 @@ export class LoLStatusReader {
         gameTime: gameStats.gameTime,
         gameMode: gameStats.gameMode,
         mapName: gameStats.mapName,
-        mapId: gameStats.mapId,
+        mapNumber: gameStats.mapNumber,
       };
 
       // Try to get active player info
       try {
         const activePlayerResponse =
           await this.api.liveclientdata.getLiveclientdataActiveplayer();
-        const activePlayer = activePlayerResponse.data as any;
 
-        if (activePlayer) {
-          this.logger.debug(
-            `Active player data: ${JSON.stringify(activePlayer, null, 2)}`
-          );
-          this.logger.debug(
-            `Active player keys: ${Object.keys(activePlayer).join(", ")}`
-          );
+        const activePlayer = this.parseWithLogging(
+          ActivePlayerSchema,
+          activePlayerResponse.data,
+          "active player"
+        );
 
-          // Log specific stats-related properties if they exist
-          if (activePlayer.championStats) {
+        this.logger.debug(
+          `Active player data: ${JSON.stringify(activePlayer, null, 2)}`
+        );
+
+        // Log specific stats-related properties if they exist
+        if (activePlayer.championStats) {
+          this.logger.debug(
+            `Champion stats: ${JSON.stringify(
+              activePlayer.championStats,
+              null,
+              2
+            )}`
+          );
+        }
+
+        status.activePlayerName =
+          activePlayer.riotIdGameName || activePlayer.summonerName;
+        status.level = activePlayer.level;
+        status.currentGold = activePlayer.currentGold;
+        status.championStats = activePlayer.championStats;
+        status.abilities = activePlayer.abilities;
+
+        this.logger.debug(
+          `Abilities: ${JSON.stringify(activePlayer.abilities, null, 2)}`
+        );
+
+        // Extract items
+        try {
+          if (status.activePlayerName) {
+            // Try to get items from the dedicated items endpoint
+            const itemsResponse =
+              await this.api.liveclientdata.getLiveclientdataPlayeritems({
+                riotId: status.activePlayerName,
+              });
+
             this.logger.debug(
-              `Champion stats: ${JSON.stringify(
-                activePlayer.championStats,
+              `Items from items endpoint before parse: ${JSON.stringify(
+                itemsResponse.data,
                 null,
                 2
               )}`
             );
-          }
 
-          status.activePlayerName =
-            activePlayer.riotIdGameName || activePlayer.summonerName;
-          status.level = activePlayer.level;
-          status.currentGold = activePlayer.currentGold;
+            const itemsData = this.parseWithLogging(
+              ItemsSchema,
+              itemsResponse.data,
+              "items"
+            );
 
-          // Extract summoner spells
-          if (activePlayer.summonerSpells) {
-            status.summonerSpells = {
-              summonerSpellOne: activePlayer.summonerSpells.summonerSpellOne
-                ? {
-                    displayName:
-                      activePlayer.summonerSpells.summonerSpellOne.displayName,
-                    rawDescription:
-                      activePlayer.summonerSpells.summonerSpellOne
-                        .rawDescription,
-                  }
-                : undefined,
-              summonerSpellTwo: activePlayer.summonerSpells.summonerSpellTwo
-                ? {
-                    displayName:
-                      activePlayer.summonerSpells.summonerSpellTwo.displayName,
-                    rawDescription:
-                      activePlayer.summonerSpells.summonerSpellTwo
-                        .rawDescription,
-                  }
-                : undefined,
-            };
+            status.items = itemsData.filter((item) => item.itemID !== 0);
             this.logger.debug(
-              `Summoner spells: ${activePlayer.summonerSpells.summonerSpellOne?.displayName} + ${activePlayer.summonerSpells.summonerSpellTwo?.displayName}`
+              `Items from items endpoint: ${status.items
+                ?.map((item) => item.displayName)
+                .join(", ")}`
+            );
+          }
+        } catch (itemsError) {
+          this.logger.debug("Items endpoint failed, no items available");
+        }
+
+        // Get champion name, scores, and summoner spells from player list
+        try {
+          const playerListResponse =
+            await this.api.liveclientdata.getLiveclientdataPlayerlist();
+
+          this.logger.debug(
+            `Player list response: ${JSON.stringify(
+              playerListResponse.data,
+              null,
+              2
+            )}`
+          );
+
+          const playerList = this.parseWithLogging(
+            PlayerListSchema,
+            playerListResponse.data,
+            "player list"
+          );
+
+          this.logger.debug(
+            `Player list data: ${JSON.stringify(playerList, null, 2)}`
+          );
+
+          // Find the active player in the list
+          const activePlayerInList = playerList.find(
+            (player) =>
+              player.riotIdGameName === status.activePlayerName ||
+              player.summonerName === status.activePlayerName
+          );
+
+          if (!activePlayerInList) {
+            throw new Error(
+              `Active player ${status.activePlayerName} not found in player list`
             );
           }
 
-          // Extract items
-          try {
-            if (status.activePlayerName) {
-              // First try to get items from the dedicated items endpoint
-              const itemsResponse =
-                await this.api.liveclientdata.getLiveclientdataPlayeritems({
-                  riotId: status.activePlayerName,
-                });
-              const itemsData = itemsResponse.data as any[];
+          this.logger.debug(
+            `Found active player in list: ${JSON.stringify(
+              activePlayerInList,
+              null,
+              2
+            )}`
+          );
 
-              if (itemsData && Array.isArray(itemsData)) {
-                status.items = itemsData.filter(
-                  (item: any) => item.itemID !== 0
-                );
-                this.logger.debug(
-                  `Items from items endpoint: ${status.items
-                    ?.map((item) => item.displayName)
-                    .join(", ")}`
-                );
-              }
-            }
-          } catch (itemsError) {
-            // Fallback to items from active player data
-            if (activePlayer.items) {
-              status.items = activePlayer.items.filter(
-                (item: any) => item.itemID !== 0
-              );
-              this.logger.debug(
-                `Items from active player: ${status.items
-                  ?.map((item) => item.displayName)
-                  .join(", ")}`
-              );
-            }
-          }
+          // Extract champion name and team
+          status.championName = activePlayerInList.championName;
+          status.team = activePlayerInList.team;
+          this.logger.debug(
+            `Champion name from player list: ${activePlayerInList.championName}, Team: ${activePlayerInList.team}`
+          );
 
-          // Get champion name from player list since it's not in active player data
-          try {
-            const playerListResponse =
-              await this.api.liveclientdata.getLiveclientdataPlayerlist();
-            const playerList = playerListResponse.data as any[];
+          // Extract KDA from player list scores
+          status.score = {
+            kills: activePlayerInList.scores.kills,
+            deaths: activePlayerInList.scores.deaths,
+            assists: activePlayerInList.scores.assists,
+          };
+          this.logger.debug(
+            `KDA from player list: ${status.score.kills}/${status.score.deaths}/${status.score.assists}`
+          );
 
-            this.logger.debug(
-              `Player list data: ${JSON.stringify(playerList, null, 2)}`
-            );
+          // Extract summoner spells from player list
+          const summonerSpells = activePlayerInList.summonerSpells;
+          this.logger.debug(
+            `Summoner spells from player list: ${JSON.stringify(
+              summonerSpells,
+              null,
+              2
+            )}`
+          );
 
-            // Find the active player in the list
-            const activePlayerInList = playerList.find(
-              (player) =>
-                player.riotIdGameName === status.activePlayerName ||
-                player.summonerName === status.activePlayerName
-            );
+          status.summonerSpells = summonerSpells;
 
-            if (activePlayerInList) {
-              this.logger.debug(
-                `Found active player in list: ${JSON.stringify(
-                  activePlayerInList,
-                  null,
-                  2
-                )}`
-              );
-              status.championName = activePlayerInList.championName;
-              this.logger.debug(
-                `Champion name from player list: ${activePlayerInList.championName}`
-              );
-
-              // Get KDA from player list scores
-              if (activePlayerInList.scores) {
-                status.score = {
-                  kills: activePlayerInList.scores.kills || 0,
-                  deaths: activePlayerInList.scores.deaths || 0,
-                  assists: activePlayerInList.scores.assists || 0,
-                };
-                this.logger.debug(
-                  `KDA from player list: ${status.score.kills}/${status.score.deaths}/${status.score.assists}`
-                );
-              }
-            }
-          } catch (playerListError) {
-            this.logger.debug("Could not fetch player list for champion name");
-          }
-
-          status.team = activePlayer.team;
+          this.logger.debug(
+            `Summoner spells: ${summonerSpells.summonerSpellOne?.displayName} + ${summonerSpells.summonerSpellTwo?.displayName}`
+          );
+        } catch (playerListError) {
+          this.logger.debug(
+            "Could not fetch player list for champion name and summoner spells"
+          );
         }
       } catch (playerError) {
         // Active player info might not be available in all game modes

@@ -50,6 +50,7 @@ class LoLStatusCard extends LitElement {
     const mapName = attributes.mapName || "N/A";
     const summonerSpells = attributes.summonerSpells || {};
     const items = attributes.items || [];
+    const abilities = attributes.abilities || {};
 
     const cardTitle = this.config.title || "League of Legends Status";
     const showHeader = this.config.show_header !== false; // Default to true
@@ -127,6 +128,91 @@ class LoLStatusCard extends LitElement {
                               <div class="spell-item">
                                 <div class="spell-name">
                                   ${summonerSpells.summonerSpellTwo.displayName}
+                                </div>
+                              </div>
+                            `
+                          : ""}
+                      </div>
+                    </div>
+                  `
+                : ""}
+              ${abilities.Q || abilities.W || abilities.E || abilities.R
+                ? html`
+                    <div class="abilities-section">
+                      <div class="section-title">Abilities</div>
+                      <div class="abilities-container">
+                        ${abilities.Q
+                          ? html`
+                              <div class="ability-item">
+                                <div class="ability-key">Q</div>
+                                <div class="ability-info">
+                                  <div class="ability-name">
+                                    ${abilities.Q.displayName}
+                                  </div>
+                                  ${abilities.Q.abilityLevel !== undefined
+                                    ? html`
+                                        <div class="ability-level">
+                                          Level ${abilities.Q.abilityLevel}
+                                        </div>
+                                      `
+                                    : ""}
+                                </div>
+                              </div>
+                            `
+                          : ""}
+                        ${abilities.W
+                          ? html`
+                              <div class="ability-item">
+                                <div class="ability-key">W</div>
+                                <div class="ability-info">
+                                  <div class="ability-name">
+                                    ${abilities.W.displayName}
+                                  </div>
+                                  ${abilities.W.abilityLevel !== undefined
+                                    ? html`
+                                        <div class="ability-level">
+                                          Level ${abilities.W.abilityLevel}
+                                        </div>
+                                      `
+                                    : ""}
+                                </div>
+                              </div>
+                            `
+                          : ""}
+                        ${abilities.E
+                          ? html`
+                              <div class="ability-item">
+                                <div class="ability-key">E</div>
+                                <div class="ability-info">
+                                  <div class="ability-name">
+                                    ${abilities.E.displayName}
+                                  </div>
+                                  ${abilities.E.abilityLevel !== undefined
+                                    ? html`
+                                        <div class="ability-level">
+                                          Level ${abilities.E.abilityLevel}
+                                        </div>
+                                      `
+                                    : ""}
+                                </div>
+                              </div>
+                            `
+                          : ""}
+                        ${abilities.R
+                          ? html`
+                              <div class="ability-item">
+                                <div class="ability-key">R</div>
+                                <div class="ability-info">
+                                  <div class="ability-name">
+                                    ${abilities.R.displayName}
+                                  </div>
+                                  ${abilities.R.abilityLevel !== undefined
+                                    ? html`
+                                        <div class="ability-level">
+                                          Level ${abilities.R.abilityLevel}
+                                        </div>
+                                      `
+                                    : ""}
                                 </div>
                               </div>
                             `
@@ -384,6 +470,53 @@ class LoLStatusCard extends LitElement {
         font-weight: 500;
         color: #673ab7;
       }
+      .abilities-section {
+        margin-bottom: 16px;
+        padding: 12px;
+        background-color: var(--card-background-color);
+        border-radius: 8px;
+        border: 1px solid var(--divider-color);
+      }
+      .abilities-container {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 8px;
+      }
+      .ability-item {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        padding: 6px 8px;
+        background-color: rgba(33, 150, 243, 0.1);
+        border-radius: 6px;
+        border: 1px solid rgba(33, 150, 243, 0.3);
+      }
+      .ability-key {
+        background-color: #2196f3;
+        color: white;
+        font-weight: bold;
+        font-size: 0.9em;
+        padding: 4px 8px;
+        border-radius: 4px;
+        min-width: 20px;
+        text-align: center;
+      }
+      .ability-info {
+        flex: 1;
+        display: flex;
+        flex-direction: column;
+        gap: 2px;
+      }
+      .ability-name {
+        font-size: 0.8em;
+        font-weight: 500;
+        color: var(--primary-text-color);
+        line-height: 1.2;
+      }
+      .ability-level {
+        font-size: 0.7em;
+        color: var(--secondary-text-color);
+      }
       .items-section {
         margin-bottom: 16px;
         padding: 12px;
@@ -452,7 +585,7 @@ class LoLStatusCard extends LitElement {
   }
 
   getCardSize() {
-    return 4;
+    return 5;
   }
 
   static getConfigElement() {

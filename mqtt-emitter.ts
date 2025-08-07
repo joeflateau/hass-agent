@@ -172,14 +172,16 @@ export class MqttEmitter {
         gameTime: lolStatus.gameTime ? Math.round(lolStatus.gameTime) : null,
         gameMode: lolStatus.gameMode,
         mapName: lolStatus.mapName,
-        mapId: lolStatus.mapId,
+        mapNumber: lolStatus.mapNumber,
         activePlayerName: lolStatus.activePlayerName,
         championName: lolStatus.championName,
         level: lolStatus.level,
         currentGold: lolStatus.currentGold,
         score: lolStatus.score || { kills: null, deaths: null, assists: null },
         team: lolStatus.team,
+        championStats: lolStatus.championStats || null,
         summonerSpells: lolStatus.summonerSpells || null,
+        abilities: lolStatus.abilities || null,
         items: lolStatus.items || [],
       });
     } catch (error) {

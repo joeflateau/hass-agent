@@ -12,16 +12,31 @@ import {
 import { LoLStatusReader } from "./lol-status-reader.ts";
 import { MqttEmitter, type MqttConfig } from "./mqtt-emitter.ts";
 
+const syncEnvSchema = z.object({
+  LOG_LEVEL: z.string().default("info"),
+});
+
+const syncEnv = syncEnvSchema.parse(process.env);
+
 // Configure Winston logger with timestamps
 const logger = winston.createLogger({
-  level: "info",
+  level: syncEnv.LOG_LEVEL || "info",
   format: winston.format.combine(
     winston.format.timestamp({
       format: "YYYY-MM-DD HH:mm:ss",
     }),
     winston.format.colorize(),
-    winston.format.printf(({ timestamp, level, message }) => {
-      return `${timestamp} [${level}] ${message}`;
+    winston.format.printf(({ timestamp, level, message, ...meta }) => {
+      let logMessage = `${timestamp} [${level}] ${message}`;
+
+      // If there are additional metadata objects, stringify and append them
+      const metaKeys = Object.keys(meta);
+      if (metaKeys.length > 0) {
+        const metaString = JSON.stringify(meta, null, 2);
+        logMessage += `\n${metaString}`;
+      }
+
+      return logMessage;
     })
   ),
   transports: [new winston.transports.Console()],
