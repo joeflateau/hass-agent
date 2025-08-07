@@ -41,7 +41,6 @@ const mockApi = {
     getLiveclientdataGamestats: mock(),
     getLiveclientdataActiveplayer: mock(),
     getLiveclientdataPlayerlist: mock(),
-    getLiveclientdataPlayeritems: mock(),
   },
 };
 
@@ -104,43 +103,31 @@ describe("LoLStatusReader", () => {
       },
     });
 
-    // Mock successful player items response
-    mockApi.liveclientdata.getLiveclientdataPlayeritems.mockResolvedValue({
-      data: [
-        {
-          canUse: false,
-          consumable: false,
-          count: 1,
-          displayName: "Doran's Blade",
-          itemID: 1055,
-          price: 450,
-          rawDescription: "+8 Attack Damage +80 Health +3% Life Steal",
-          slot: 0,
-        },
-        {
-          canUse: true,
-          consumable: true,
-          count: 1,
-          displayName: "Health Potion",
-          itemID: 2003,
-          price: 50,
-          rawDescription: "Restores 150 Health over 15 seconds.",
-          slot: 1,
-        },
-      ],
-    });
-
-    // Mock successful player list response with scores
+    // Mock successful player list response with enhanced data
     mockApi.liveclientdata.getLiveclientdataPlayerlist.mockResolvedValue({
       data: [
         {
           riotIdGameName: "TestPlayer",
+          riotId: "TestPlayer#NA1",
+          riotIdTagLine: "NA1",
+          summonerName: "TestPlayer#NA1",
           championName: "Jinx",
+          rawChampionName: "game_character_displayname_Jinx",
+          skinName: "Classic Jinx",
+          rawSkinName: "game_character_skin_displayname_Jinx_0",
+          skinID: 0,
           team: "ORDER",
+          level: 12,
+          position: "BOTTOM",
+          isBot: false,
+          isDead: false,
+          respawnTimer: 0,
           scores: {
             kills: 5,
             deaths: 2,
             assists: 8,
+            creepScore: 145,
+            wardScore: 12,
           },
           summonerSpells: {
             summonerSpellOne: {
@@ -154,15 +141,73 @@ describe("LoLStatusReader", () => {
                 "Restores Health to you and your most wounded nearby ally.",
             },
           },
+          items: [
+            {
+              canUse: false,
+              consumable: false,
+              count: 1,
+              displayName: "Doran's Blade",
+              itemID: 1055,
+              price: 450,
+              rawDescription: "+8 Attack Damage +80 Health +3% Life Steal",
+              rawDisplayName: "Item_1055_Name",
+              slot: 0,
+            },
+            {
+              canUse: true,
+              consumable: true,
+              count: 1,
+              displayName: "Health Potion",
+              itemID: 2003,
+              price: 50,
+              rawDescription: "Restores 150 Health over 15 seconds.",
+              rawDisplayName: "Item_2003_Name",
+              slot: 1,
+            },
+          ],
+          runes: {
+            keystone: {
+              displayName: "Lethal Tempo",
+              id: 8008,
+              rawDescription: "perk_tooltip_LethalTempo",
+              rawDisplayName: "perk_displayname_LethalTempo",
+            },
+            primaryRuneTree: {
+              displayName: "Precision",
+              id: 8000,
+              rawDescription: "perkstyle_tooltip_7201",
+              rawDisplayName: "perkstyle_displayname_7201",
+            },
+            secondaryRuneTree: {
+              displayName: "Inspiration",
+              id: 8300,
+              rawDescription: "perkstyle_tooltip_7203",
+              rawDisplayName: "perkstyle_displayname_7203",
+            },
+          },
         },
         {
           riotIdGameName: "EnemyPlayer",
+          riotId: "EnemyPlayer#NA1",
+          riotIdTagLine: "NA1",
+          summonerName: "EnemyPlayer#NA1",
           championName: "Ashe",
+          rawChampionName: "game_character_displayname_Ashe",
+          skinName: "Classic Ashe",
+          rawSkinName: "game_character_skin_displayname_Ashe_0",
+          skinID: 0,
           team: "CHAOS",
+          level: 11,
+          position: "BOTTOM",
+          isBot: false,
+          isDead: false,
+          respawnTimer: 0,
           scores: {
             kills: 3,
             deaths: 4,
             assists: 6,
+            creepScore: 125,
+            wardScore: 8,
           },
           summonerSpells: {
             summonerSpellOne: {
@@ -174,6 +219,39 @@ describe("LoLStatusReader", () => {
               displayName: "Ignite",
               rawDescription:
                 "Ignites target enemy champion, dealing true damage over time.",
+            },
+          },
+          items: [
+            {
+              canUse: false,
+              consumable: false,
+              count: 1,
+              displayName: "Doran's Blade",
+              itemID: 1055,
+              price: 450,
+              rawDescription: "+8 Attack Damage +80 Health +3% Life Steal",
+              rawDisplayName: "Item_1055_Name",
+              slot: 0,
+            },
+          ],
+          runes: {
+            keystone: {
+              displayName: "Lethal Tempo",
+              id: 8008,
+              rawDescription: "perk_tooltip_LethalTempo",
+              rawDisplayName: "perk_displayname_LethalTempo",
+            },
+            primaryRuneTree: {
+              displayName: "Precision",
+              id: 8000,
+              rawDescription: "perkstyle_tooltip_7201",
+              rawDisplayName: "perkstyle_displayname_7201",
+            },
+            secondaryRuneTree: {
+              displayName: "Inspiration",
+              id: 8300,
+              rawDescription: "perkstyle_tooltip_7203",
+              rawDisplayName: "perkstyle_displayname_7203",
             },
           },
         },
@@ -197,6 +275,8 @@ describe("LoLStatusReader", () => {
       kills: 5,
       deaths: 2,
       assists: 8,
+      creepScore: 145,
+      wardScore: 12,
     });
     expect(status.summonerSpells).toEqual({
       summonerSpellOne: {
@@ -219,6 +299,7 @@ describe("LoLStatusReader", () => {
         itemID: 1055,
         price: 450,
         rawDescription: "+8 Attack Damage +80 Health +3% Life Steal",
+        rawDisplayName: "Item_1055_Name",
         slot: 0,
       },
       {
@@ -229,6 +310,7 @@ describe("LoLStatusReader", () => {
         itemID: 2003,
         price: 50,
         rawDescription: "Restores 150 Health over 15 seconds.",
+        rawDisplayName: "Item_2003_Name",
         slot: 1,
       },
     ]);
@@ -261,12 +343,26 @@ describe("LoLStatusReader", () => {
       data: [
         {
           riotIdGameName: "TestPlayer",
+          riotId: "TestPlayer#NA1",
+          riotIdTagLine: "NA1",
+          summonerName: "TestPlayer#NA1",
           championName: "Lux",
+          rawChampionName: "game_character_displayname_Lux",
+          skinName: "Classic Lux",
+          rawSkinName: "game_character_skin_displayname_Lux_0",
+          skinID: 0,
           team: "ORDER",
+          level: 14,
+          position: "MIDDLE",
+          isBot: false,
+          isDead: false,
+          respawnTimer: 0,
           scores: {
             kills: 6,
             deaths: 1,
             assists: 11,
+            creepScore: 180,
+            wardScore: 15,
           },
           summonerSpells: {
             summonerSpellOne: {
@@ -280,14 +376,32 @@ describe("LoLStatusReader", () => {
                 "Ignites target enemy champion, dealing true damage over time.",
             },
           },
+          items: [],
+          runes: {
+            keystone: {
+              displayName: "Electrocute",
+              id: 8112,
+              rawDescription: "perk_tooltip_Electrocute",
+              rawDisplayName: "perk_displayname_Electrocute",
+            },
+            primaryRuneTree: {
+              displayName: "Domination",
+              id: 8100,
+              rawDescription: "perkstyle_tooltip_7200",
+              rawDisplayName: "perkstyle_displayname_7200",
+            },
+            secondaryRuneTree: {
+              displayName: "Inspiration",
+              id: 8300,
+              rawDescription: "perkstyle_tooltip_7203",
+              rawDisplayName: "perkstyle_displayname_7203",
+            },
+          },
         },
       ],
     });
 
-    // Mock items response (can be empty for this test)
-    mockApi.liveclientdata.getLiveclientdataPlayeritems.mockResolvedValue({
-      data: [],
-    });
+    // Items are now included in player list data above
 
     const reader = new LoLStatusReader(logger);
     const status = await reader.getGameStatus();
@@ -299,6 +413,8 @@ describe("LoLStatusReader", () => {
       kills: 6,
       deaths: 1,
       assists: 11,
+      creepScore: 180,
+      wardScore: 15,
     });
   });
 
@@ -317,6 +433,11 @@ describe("LoLStatusReader", () => {
     mockApi.liveclientdata.getLiveclientdataActiveplayer.mockRejectedValue(
       new Error("Active player data not available")
     );
+
+    // Mock empty player list so no player data is found
+    mockApi.liveclientdata.getLiveclientdataPlayerlist.mockResolvedValue({
+      data: [],
+    });
 
     const reader = new LoLStatusReader(logger);
     const status = await reader.getGameStatus();
@@ -365,21 +486,18 @@ describe("LoLStatusReader", () => {
       new Error("Player list not available")
     );
 
-    // Mock items response (can be empty for this test)
-    mockApi.liveclientdata.getLiveclientdataPlayeritems.mockResolvedValue({
-      data: [],
-    });
+    // Items are now included in player list data above
 
     const reader = new LoLStatusReader(logger);
     const status = await reader.getGameStatus();
 
     expect(status.isInGame).toBe(true);
-    expect(status.activePlayerName).toBe("TestPlayer");
+    expect(status.activePlayerName).toBeUndefined(); // No player data when player list fails
     expect(status.championName).toBeUndefined(); // Should be undefined when player list fails
-    expect(status.level).toBe(15);
+    expect(status.level).toBeUndefined(); // Should be undefined when player list fails
   });
 
-  test("should handle items API failure gracefully", async () => {
+  test("should get items from player list when available", async () => {
     // Mock successful game stats response
     mockApi.liveclientdata.getLiveclientdataGamestats.mockResolvedValue({
       data: {
@@ -401,21 +519,100 @@ describe("LoLStatusReader", () => {
       },
     });
 
-    // Mock failed items API response
-    mockApi.liveclientdata.getLiveclientdataPlayeritems.mockRejectedValue(
-      new Error("Items API not available")
-    );
-
-    // Mock empty player list
+    // Mock player list with items
     mockApi.liveclientdata.getLiveclientdataPlayerlist.mockResolvedValue({
-      data: [],
+      data: [
+        {
+          riotIdGameName: "TestPlayer",
+          riotId: "TestPlayer#NA1",
+          riotIdTagLine: "NA1",
+          summonerName: "TestPlayer#NA1",
+          championName: "Vayne",
+          rawChampionName: "game_character_displayname_Vayne",
+          skinName: "Classic Vayne",
+          rawSkinName: "game_character_skin_displayname_Vayne_0",
+          skinID: 0,
+          team: "ORDER",
+          level: 10,
+          position: "BOTTOM",
+          isBot: false,
+          isDead: false,
+          respawnTimer: 0,
+          scores: {
+            kills: 4,
+            deaths: 2,
+            assists: 6,
+            creepScore: 120,
+            wardScore: 8,
+          },
+          summonerSpells: {
+            summonerSpellOne: {
+              displayName: "Flash",
+              rawDescription:
+                "Teleports your champion a short distance toward your cursor's location.",
+            },
+            summonerSpellTwo: {
+              displayName: "Heal",
+              rawDescription:
+                "Restores Health to you and your most wounded nearby ally.",
+            },
+          },
+          items: [
+            {
+              canUse: false,
+              consumable: false,
+              count: 1,
+              displayName: "Berserker's Greaves",
+              itemID: 3006,
+              price: 1100,
+              rawDescription: "+35% Attack Speed +45 Movement Speed",
+              rawDisplayName: "Item_3006_Name",
+              slot: 0,
+            },
+            {
+              canUse: false,
+              consumable: false,
+              count: 1,
+              displayName: "Blade of The Ruined King",
+              itemID: 3153,
+              price: 3200,
+              rawDescription:
+                "+40 Attack Damage +25% Attack Speed +12% Life Steal",
+              rawDisplayName: "Item_3153_Name",
+              slot: 1,
+            },
+          ],
+          runes: {
+            keystone: {
+              displayName: "Lethal Tempo",
+              id: 8008,
+              rawDescription: "perk_tooltip_LethalTempo",
+              rawDisplayName: "perk_displayname_LethalTempo",
+            },
+            primaryRuneTree: {
+              displayName: "Precision",
+              id: 8000,
+              rawDescription: "perkstyle_tooltip_7201",
+              rawDisplayName: "perkstyle_displayname_7201",
+            },
+            secondaryRuneTree: {
+              displayName: "Inspiration",
+              id: 8300,
+              rawDescription: "perkstyle_tooltip_7203",
+              rawDisplayName: "perkstyle_displayname_7203",
+            },
+          },
+        },
+      ],
     });
 
     const reader = new LoLStatusReader(logger);
     const status = await reader.getGameStatus();
 
     expect(status.isInGame).toBe(true);
-    expect(status.items).toBeUndefined(); // Items should be undefined when items API fails and no fallback
+    expect(status.items).toHaveLength(2);
+    expect(status.items?.[0]?.displayName).toBe("Berserker's Greaves");
+    expect(status.items?.[1]?.displayName).toBe("Blade of The Ruined King");
   });
 
   test("should fallback to summoner spells from player list when not in active player data", async () => {
@@ -441,22 +638,33 @@ describe("LoLStatusReader", () => {
       },
     });
 
-    // Mock empty items
-    mockApi.liveclientdata.getLiveclientdataPlayeritems.mockResolvedValue({
-      data: [],
-    });
+    // Items are now included in player list data below
 
     // Mock player list with summoner spells
     mockApi.liveclientdata.getLiveclientdataPlayerlist.mockResolvedValue({
       data: [
         {
           riotIdGameName: "TestPlayer",
+          riotId: "TestPlayer#NA1",
+          riotIdTagLine: "NA1",
+          summonerName: "TestPlayer#NA1",
           championName: "Graves",
+          rawChampionName: "game_character_displayname_Graves",
+          skinName: "Classic Graves",
+          rawSkinName: "game_character_skin_displayname_Graves_0",
+          skinID: 0,
           team: "ORDER",
+          level: 8,
+          position: "JUNGLE",
+          isBot: false,
+          isDead: false,
+          respawnTimer: 0,
           scores: {
             kills: 2,
             deaths: 1,
             assists: 3,
+            creepScore: 85,
+            wardScore: 5,
           },
           summonerSpells: {
             summonerSpellOne: {
@@ -466,6 +674,27 @@ describe("LoLStatusReader", () => {
             summonerSpellTwo: {
               displayName: "Smite",
               rawDescription: "Deals true damage to target monster or minion.",
+            },
+          },
+          items: [],
+          runes: {
+            keystone: {
+              displayName: "Conqueror",
+              id: 8010,
+              rawDescription: "perk_tooltip_Conqueror",
+              rawDisplayName: "perk_displayname_Conqueror",
+            },
+            primaryRuneTree: {
+              displayName: "Precision",
+              id: 8000,
+              rawDescription: "perkstyle_tooltip_7201",
+              rawDisplayName: "perkstyle_displayname_7201",
+            },
+            secondaryRuneTree: {
+              displayName: "Domination",
+              id: 8100,
+              rawDescription: "perkstyle_tooltip_7200",
+              rawDisplayName: "perkstyle_displayname_7200",
             },
           },
         },
@@ -492,6 +721,8 @@ describe("LoLStatusReader", () => {
       kills: 2,
       deaths: 1,
       assists: 3,
+      creepScore: 85,
+      wardScore: 5,
     });
   });
 });

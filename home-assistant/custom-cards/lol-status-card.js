@@ -44,13 +44,25 @@ class LoLStatusCard extends LitElement {
       ? Math.floor(attributes.gameTime / 60)
       : null;
     const championName = attributes.championName || "N/A";
+    const skinName = attributes.skinName || null;
     const level = attributes.level || "N/A";
     const currentGold = attributes.currentGold || 0;
-    const score = attributes.score || { kills: 0, deaths: 0, assists: 0 };
+    const score = attributes.score || {
+      kills: 0,
+      deaths: 0,
+      assists: 0,
+      creepScore: 0,
+      wardScore: 0,
+    };
     const mapName = attributes.mapName || "N/A";
+    const position = attributes.position || null;
+    const team = attributes.team || null;
+    const isDead = attributes.isDead || false;
+    const respawnTimer = attributes.respawnTimer || 0;
     const summonerSpells = attributes.summonerSpells || {};
     const items = attributes.items || [];
     const abilities = attributes.abilities || {};
+    const runes = attributes.runes || null;
 
     const cardTitle = this.config.title || "League of Legends Status";
     const showHeader = this.config.show_header !== false; // Default to true
@@ -104,7 +116,21 @@ class LoLStatusCard extends LitElement {
                 ? html`
                     <div class="champion-info">
                       <div class="champion-name">${championName}</div>
-                      <div class="champion-level">Level ${level}</div>
+                      ${skinName
+                        ? html`<div class="skin-name">${skinName}</div>`
+                        : ""}
+                      <div class="champion-details">
+                        <span class="champion-level">Level ${level}</span>
+                        ${position
+                          ? html`<span class="position">${position}</span>`
+                          : ""}
+                        ${team ? html`<span class="team">${team}</span>` : ""}
+                      </div>
+                      ${isDead
+                        ? html`<div class="death-timer">
+                            💀 Respawn: ${respawnTimer}s
+                          </div>`
+                        : ""}
                     </div>
                   `
                 : ""}
@@ -221,6 +247,35 @@ class LoLStatusCard extends LitElement {
                     </div>
                   `
                 : ""}
+              ${runes
+                ? html`
+                    <div class="runes-section">
+                      <div class="section-title">Runes</div>
+                      <div class="runes-container">
+                        <div class="keystone-rune">
+                          <div class="rune-type">Keystone</div>
+                          <div class="rune-name">
+                            ${runes.keystone.displayName}
+                          </div>
+                        </div>
+                        <div class="rune-trees">
+                          <div class="rune-tree">
+                            <div class="rune-type">Primary</div>
+                            <div class="rune-name">
+                              ${runes.primaryRuneTree.displayName}
+                            </div>
+                          </div>
+                          <div class="rune-tree">
+                            <div class="rune-type">Secondary</div>
+                            <div class="rune-name">
+                              ${runes.secondaryRuneTree.displayName}
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  `
+                : ""}
               ${currentGold > 0
                 ? html`
                     <div class="gold-info">
@@ -251,6 +306,26 @@ class LoLStatusCard extends LitElement {
                         <div class="score-number assists">${score.assists}</div>
                         <div class="score-label">Assists</div>
                       </div>
+                      ${score.creepScore !== undefined
+                        ? html`
+                            <div class="score-item">
+                              <div class="score-number cs">
+                                ${score.creepScore}
+                              </div>
+                              <div class="score-label">CS</div>
+                            </div>
+                          `
+                        : ""}
+                      ${score.wardScore !== undefined
+                        ? html`
+                            <div class="score-item">
+                              <div class="score-number wards">
+                                ${score.wardScore}
+                              </div>
+                              <div class="score-label">Wards</div>
+                            </div>
+                          `
+                        : ""}
                     </div>
                   `
                 : ""}
@@ -367,12 +442,54 @@ class LoLStatusCard extends LitElement {
         color: var(--primary-color);
         margin-bottom: 4px;
       }
+      .skin-name {
+        font-size: 0.9em;
+        color: var(--secondary-text-color);
+        font-style: italic;
+        margin-bottom: 6px;
+      }
+      .champion-details {
+        display: flex;
+        gap: 12px;
+        justify-content: center;
+        flex-wrap: wrap;
+      }
       .champion-level {
         color: var(--secondary-text-color);
+      }
+      .position {
+        background-color: var(--primary-color);
+        color: white;
+        padding: 2px 8px;
+        border-radius: 12px;
+        font-size: 0.8em;
+        font-weight: 500;
+        text-transform: uppercase;
+      }
+      .team {
+        background-color: var(--accent-color, #ff9800);
+        color: white;
+        padding: 2px 8px;
+        border-radius: 12px;
+        font-size: 0.8em;
+        font-weight: 500;
+      }
+      .death-timer {
+        margin-top: 8px;
+        padding: 4px 8px;
+        background-color: rgba(244, 67, 54, 0.1);
+        border: 1px solid rgba(244, 67, 54, 0.3);
+        border-radius: 6px;
+        color: #f44336;
+        font-weight: 500;
+        font-size: 0.9em;
+        text-align: center;
       }
       .score-section {
         display: flex;
         justify-content: space-around;
+        flex-wrap: wrap;
+        gap: 8px;
         padding: 12px;
         background-color: var(--card-background-color);
         border-radius: 8px;
@@ -381,6 +498,7 @@ class LoLStatusCard extends LitElement {
       .score-item {
         text-align: center;
         flex: 1;
+        min-width: 60px;
       }
       .score-number {
         font-size: 1.5em;
@@ -400,6 +518,12 @@ class LoLStatusCard extends LitElement {
       }
       .assists {
         color: #2196f3;
+      }
+      .cs {
+        color: #ff9800;
+      }
+      .wards {
+        color: #9c27b0;
       }
       .gold-info {
         display: flex;
@@ -580,6 +704,49 @@ class LoLStatusCard extends LitElement {
         border-radius: 3px;
         min-width: 12px;
         text-align: center;
+      }
+      .runes-section {
+        margin-bottom: 16px;
+        padding: 12px;
+        background-color: var(--card-background-color);
+        border-radius: 8px;
+        border: 1px solid var(--divider-color);
+      }
+      .runes-container {
+        display: flex;
+        flex-direction: column;
+        gap: 12px;
+      }
+      .keystone-rune {
+        text-align: center;
+        padding: 8px;
+        background-color: rgba(255, 193, 7, 0.1);
+        border: 1px solid rgba(255, 193, 7, 0.3);
+        border-radius: 6px;
+      }
+      .rune-trees {
+        display: flex;
+        gap: 8px;
+      }
+      .rune-tree {
+        flex: 1;
+        text-align: center;
+        padding: 6px;
+        background-color: rgba(156, 39, 176, 0.1);
+        border: 1px solid rgba(156, 39, 176, 0.3);
+        border-radius: 6px;
+      }
+      .rune-type {
+        font-size: 0.7em;
+        color: var(--secondary-text-color);
+        text-transform: uppercase;
+        font-weight: 500;
+        margin-bottom: 2px;
+      }
+      .rune-name {
+        font-size: 0.8em;
+        font-weight: 500;
+        color: var(--primary-text-color);
       }
     `;
   }

@@ -177,7 +177,13 @@ export class MqttEmitter {
         championName: lolStatus.championName,
         level: lolStatus.level,
         currentGold: lolStatus.currentGold,
-        score: lolStatus.score || { kills: null, deaths: null, assists: null },
+        score: lolStatus.score || {
+          kills: null,
+          deaths: null,
+          assists: null,
+          creepScore: null,
+          wardScore: null,
+        },
         team: lolStatus.team,
         championStats: lolStatus.championStats || null,
         summonerSpells: lolStatus.summonerSpells || null,
@@ -417,6 +423,28 @@ export class MqttEmitter {
       unit_of_measurement: "assists",
       value_template: "{{ value_json.score.assists | default('unavailable') }}",
       icon: "mdi:account-multiple",
+      device: deviceConfig,
+    });
+
+    this.publishDiscoveryConfig("sensor", "lol_creep_score", {
+      name: "LoL Creep Score",
+      unique_id: `${this.deviceId}_lol_creep_score`,
+      state_topic: lolStatusTopic,
+      unit_of_measurement: "cs",
+      value_template:
+        "{{ value_json.score.creepScore | default('unavailable') }}",
+      icon: "mdi:sword",
+      device: deviceConfig,
+    });
+
+    this.publishDiscoveryConfig("sensor", "lol_ward_score", {
+      name: "LoL Ward Score",
+      unique_id: `${this.deviceId}_lol_ward_score`,
+      state_topic: lolStatusTopic,
+      unit_of_measurement: "wards",
+      value_template:
+        "{{ value_json.score.wardScore | default('unavailable') }}",
+      icon: "mdi:eye",
       device: deviceConfig,
     });
 
