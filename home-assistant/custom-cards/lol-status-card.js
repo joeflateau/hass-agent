@@ -112,6 +112,49 @@ class LoLStatusCard extends LitElement {
                     </div>
                   `
                 : ""}
+              ${score.kills !== null &&
+              score.deaths !== null &&
+              score.assists !== null
+                ? html`
+                    <div class="score-section">
+                      <div class="score-item">
+                        <div class="score-number kills">${score.kills}</div>
+                        <div class="score-label">Kills</div>
+                      </div>
+                      <div class="score-separator">/</div>
+                      <div class="score-item">
+                        <div class="score-number deaths">${score.deaths}</div>
+                        <div class="score-label">Deaths</div>
+                      </div>
+                      <div class="score-separator">/</div>
+                      <div class="score-item">
+                        <div class="score-number assists">${score.assists}</div>
+                        <div class="score-label">Assists</div>
+                      </div>
+                      ${score.creepScore !== undefined
+                        ? html`
+                            <div class="score-divider"></div>
+                            <div class="score-item">
+                              <div class="score-number cs">
+                                ${score.creepScore}
+                              </div>
+                              <div class="score-label">CS</div>
+                            </div>
+                          `
+                        : ""}
+                      ${score.wardScore !== undefined
+                        ? html`
+                            <div class="score-item">
+                              <div class="score-number wards">
+                                ${score.wardScore}
+                              </div>
+                              <div class="score-label">Wards</div>
+                            </div>
+                          `
+                        : ""}
+                    </div>
+                  `
+                : ""}
               ${championName !== "N/A"
                 ? html`
                     <div class="champion-info">
@@ -138,35 +181,57 @@ class LoLStatusCard extends LitElement {
               summonerSpells.summonerSpellTwo
                 ? html`
                     <div class="summoner-spells">
-                      <div class="section-title">Summoner Spells</div>
                       <div class="spells-container">
                         ${summonerSpells.summonerSpellOne
                           ? html`
                               <div class="spell-item">
-                                <div class="spell-name">
-                                  ${summonerSpells.summonerSpellOne.displayName}
+                                <div class="spell-key">D</div>
+                                <div class="spell-info">
+                                  <div class="spell-name">
+                                    ${summonerSpells.summonerSpellOne
+                                      .displayName}
+                                  </div>
                                 </div>
                               </div>
                             `
-                          : ""}
+                          : html`<div class="spell-item empty"></div>`}
                         ${summonerSpells.summonerSpellTwo
                           ? html`
                               <div class="spell-item">
-                                <div class="spell-name">
-                                  ${summonerSpells.summonerSpellTwo.displayName}
+                                <div class="spell-key">F</div>
+                                <div class="spell-info">
+                                  <div class="spell-name">
+                                    ${summonerSpells.summonerSpellTwo
+                                      .displayName}
+                                  </div>
                                 </div>
                               </div>
                             `
-                          : ""}
+                          : html`<div class="spell-item empty"></div>`}
                       </div>
                     </div>
                   `
                 : ""}
-              ${abilities.Q || abilities.W || abilities.E || abilities.R
+              ${abilities.Q ||
+              abilities.W ||
+              abilities.E ||
+              abilities.R ||
+              abilities.Passive
                 ? html`
                     <div class="abilities-section">
-                      <div class="section-title">Abilities</div>
                       <div class="abilities-container">
+                        ${abilities.Passive
+                          ? html`
+                              <div class="ability-item">
+                                <div class="ability-key passive">P</div>
+                                <div class="ability-info">
+                                  <div class="ability-name">
+                                    ${abilities.Passive.displayName}
+                                  </div>
+                                </div>
+                              </div>
+                            `
+                          : html`<div class="ability-item empty"></div>`}
                         ${abilities.Q
                           ? html`
                               <div class="ability-item">
@@ -178,14 +243,14 @@ class LoLStatusCard extends LitElement {
                                   ${abilities.Q.abilityLevel !== undefined
                                     ? html`
                                         <div class="ability-level">
-                                          Level ${abilities.Q.abilityLevel}
+                                          Lv ${abilities.Q.abilityLevel}
                                         </div>
                                       `
                                     : ""}
                                 </div>
                               </div>
                             `
-                          : ""}
+                          : html`<div class="ability-item empty"></div>`}
                         ${abilities.W
                           ? html`
                               <div class="ability-item">
@@ -197,14 +262,14 @@ class LoLStatusCard extends LitElement {
                                   ${abilities.W.abilityLevel !== undefined
                                     ? html`
                                         <div class="ability-level">
-                                          Level ${abilities.W.abilityLevel}
+                                          Lv ${abilities.W.abilityLevel}
                                         </div>
                                       `
                                     : ""}
                                 </div>
                               </div>
                             `
-                          : ""}
+                          : html`<div class="ability-item empty"></div>`}
                         ${abilities.E
                           ? html`
                               <div class="ability-item">
@@ -216,18 +281,18 @@ class LoLStatusCard extends LitElement {
                                   ${abilities.E.abilityLevel !== undefined
                                     ? html`
                                         <div class="ability-level">
-                                          Level ${abilities.E.abilityLevel}
+                                          Lv ${abilities.E.abilityLevel}
                                         </div>
                                       `
                                     : ""}
                                 </div>
                               </div>
                             `
-                          : ""}
+                          : html`<div class="ability-item empty"></div>`}
                         ${abilities.R
                           ? html`
                               <div class="ability-item">
-                                <div class="ability-key">R</div>
+                                <div class="ability-key ultimate">R</div>
                                 <div class="ability-info">
                                   <div class="ability-name">
                                     ${abilities.R.displayName}
@@ -235,14 +300,14 @@ class LoLStatusCard extends LitElement {
                                   ${abilities.R.abilityLevel !== undefined
                                     ? html`
                                         <div class="ability-level">
-                                          Level ${abilities.R.abilityLevel}
+                                          Lv ${abilities.R.abilityLevel}
                                         </div>
                                       `
                                     : ""}
                                 </div>
                               </div>
                             `
-                          : ""}
+                          : html`<div class="ability-item empty"></div>`}
                       </div>
                     </div>
                   `
@@ -250,7 +315,6 @@ class LoLStatusCard extends LitElement {
               ${runes
                 ? html`
                     <div class="runes-section">
-                      <div class="section-title">Runes</div>
                       <div class="runes-container">
                         <div class="keystone-rune">
                           <div class="rune-type">Keystone</div>
@@ -289,69 +353,64 @@ class LoLStatusCard extends LitElement {
                     </div>
                   `
                 : ""}
-              ${score.kills !== null &&
-              score.deaths !== null &&
-              score.assists !== null
-                ? html`
-                    <div class="score-section">
-                      <div class="score-item">
-                        <div class="score-number kills">${score.kills}</div>
-                        <div class="score-label">Kills</div>
-                      </div>
-                      <div class="score-item">
-                        <div class="score-number deaths">${score.deaths}</div>
-                        <div class="score-label">Deaths</div>
-                      </div>
-                      <div class="score-item">
-                        <div class="score-number assists">${score.assists}</div>
-                        <div class="score-label">Assists</div>
-                      </div>
-                      ${score.creepScore !== undefined
-                        ? html`
-                            <div class="score-item">
-                              <div class="score-number cs">
-                                ${score.creepScore}
-                              </div>
-                              <div class="score-label">CS</div>
-                            </div>
-                          `
-                        : ""}
-                      ${score.wardScore !== undefined
-                        ? html`
-                            <div class="score-item">
-                              <div class="score-number wards">
-                                ${score.wardScore}
-                              </div>
-                              <div class="score-label">Wards</div>
-                            </div>
-                          `
-                        : ""}
-                    </div>
-                  `
-                : ""}
-              ${items.length > 0
+              ${items.length > 0 || true
                 ? html`
                     <div class="items-section">
-                      <div class="section-title">Items</div>
                       <div class="items-grid">
-                        ${items.map(
-                          (item) => html`
-                            <div
-                              class="item-slot"
-                              title="${item.rawDescription}"
-                            >
-                              <div class="item-name">${item.displayName}</div>
-                              ${item.count > 1
-                                ? html`<div class="item-count">
-                                    x${item.count}
-                                  </div>`
-                                : ""}
-                            </div>
-                          `
-                        )}
-                        ${Array.from({
-                          length: Math.max(0, 6 - items.length),
-                        }).map(() => html`<div class="item-slot empty"></div>`)}
+                        ${(() => {
+                          // Create array for 7 slots (6 items + 1 trinket)
+                          const itemSlots = new Array(7).fill(null);
+
+                          // Place items in their correct slots
+                          items.forEach((item) => {
+                            const slot =
+                              item.slot !== undefined
+                                ? item.slot
+                                : item.itemID % 7;
+                            if (slot >= 0 && slot < 7) {
+                              itemSlots[slot] = item;
+                            }
+                          });
+
+                          return itemSlots.map((item, index) => {
+                            const isTrinket = index === 6;
+                            return item
+                              ? html`
+                                  <div
+                                    class="item-slot ${isTrinket
+                                      ? "trinket"
+                                      : ""}"
+                                    title="${item.rawDescription ||
+                                    item.displayName}"
+                                  >
+                                    ${item.canUse
+                                      ? html`
+                                          <div class="item-key">
+                                            ${isTrinket
+                                              ? "4"
+                                              : index < 3
+                                              ? (index + 1).toString()
+                                              : (index + 2).toString()}
+                                          </div>
+                                        `
+                                      : ""}
+                                    <div class="item-name">
+                                      ${item.displayName}
+                                    </div>
+                                    ${item.count > 1
+                                      ? html`<div class="item-count">
+                                          x${item.count}
+                                        </div>`
+                                      : ""}
+                                  </div>
+                                `
+                              : html`<div
+                                  class="item-slot empty ${isTrinket
+                                    ? "trinket"
+                                    : ""}"
+                                ></div>`;
+                          });
+                        })()}
                       </div>
                     </div>
                   `
@@ -369,29 +428,30 @@ class LoLStatusCard extends LitElement {
   static get styles() {
     return css`
       ha-card {
-        padding: 16px;
+        padding: 12px;
       }
       .card-header {
         display: flex;
         align-items: center;
-        margin-bottom: 16px;
+        margin-bottom: 12px;
       }
       .card-header ha-icon {
-        margin-right: 8px;
+        margin-right: 6px;
         color: var(--primary-color);
       }
       .card-title {
-        font-size: 1.2em;
+        font-size: 1.1em;
         font-weight: 500;
         margin: 0;
       }
       .status-indicator {
         display: flex;
         align-items: center;
-        margin-bottom: 16px;
-        padding: 8px 12px;
-        border-radius: 8px;
+        margin-bottom: 12px;
+        padding: 6px 10px;
+        border-radius: 6px;
         font-weight: 500;
+        font-size: 0.9em;
       }
       .status-online {
         background-color: rgba(76, 175, 80, 0.1);
@@ -404,111 +464,127 @@ class LoLStatusCard extends LitElement {
         border: 1px solid rgba(158, 158, 158, 0.3);
       }
       .status-indicator ha-icon {
-        margin-right: 8px;
+        margin-right: 6px;
       }
       .game-info {
         display: grid;
         grid-template-columns: 1fr 1fr;
-        gap: 16px;
-        margin-bottom: 16px;
+        gap: 12px;
+        margin-bottom: 12px;
       }
       .info-item {
         display: flex;
         flex-direction: column;
       }
       .info-label {
-        font-size: 0.8em;
+        font-size: 0.7em;
         color: var(--secondary-text-color);
-        margin-bottom: 4px;
+        margin-bottom: 2px;
         text-transform: uppercase;
         font-weight: 500;
       }
       .info-value {
-        font-size: 1.1em;
+        font-size: 1em;
         font-weight: 500;
         color: var(--primary-text-color);
       }
       .champion-info {
         text-align: center;
-        margin-bottom: 16px;
-        padding: 12px;
+        margin-bottom: 12px;
+        padding: 8px;
         background-color: var(--card-background-color);
-        border-radius: 8px;
+        border-radius: 6px;
         border: 1px solid var(--divider-color);
       }
       .champion-name {
-        font-size: 1.3em;
+        font-size: 1.2em;
         font-weight: bold;
         color: var(--primary-color);
-        margin-bottom: 4px;
+        margin-bottom: 2px;
       }
       .skin-name {
-        font-size: 0.9em;
+        font-size: 0.8em;
         color: var(--secondary-text-color);
         font-style: italic;
-        margin-bottom: 6px;
+        margin-bottom: 4px;
       }
       .champion-details {
         display: flex;
-        gap: 12px;
+        gap: 8px;
         justify-content: center;
         flex-wrap: wrap;
       }
       .champion-level {
         color: var(--secondary-text-color);
+        font-size: 0.85em;
       }
       .position {
         background-color: var(--primary-color);
         color: white;
-        padding: 2px 8px;
-        border-radius: 12px;
-        font-size: 0.8em;
+        padding: 1px 6px;
+        border-radius: 10px;
+        font-size: 0.7em;
         font-weight: 500;
         text-transform: uppercase;
       }
       .team {
         background-color: var(--accent-color, #ff9800);
         color: white;
-        padding: 2px 8px;
-        border-radius: 12px;
-        font-size: 0.8em;
+        padding: 1px 6px;
+        border-radius: 10px;
+        font-size: 0.7em;
         font-weight: 500;
       }
       .death-timer {
-        margin-top: 8px;
-        padding: 4px 8px;
+        margin-top: 6px;
+        padding: 3px 6px;
         background-color: rgba(244, 67, 54, 0.1);
         border: 1px solid rgba(244, 67, 54, 0.3);
-        border-radius: 6px;
+        border-radius: 4px;
         color: #f44336;
         font-weight: 500;
-        font-size: 0.9em;
+        font-size: 0.8em;
         text-align: center;
       }
       .score-section {
         display: flex;
-        justify-content: space-around;
-        flex-wrap: wrap;
-        gap: 8px;
-        padding: 12px;
+        align-items: center;
+        justify-content: center;
+        gap: 6px;
+        margin: 10px 0;
+        padding: 8px;
         background-color: var(--card-background-color);
-        border-radius: 8px;
+        border-radius: 6px;
         border: 1px solid var(--divider-color);
       }
       .score-item {
         text-align: center;
-        flex: 1;
-        min-width: 60px;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+      }
+      .score-separator {
+        font-size: 1.1em;
+        font-weight: bold;
+        color: var(--secondary-text-color);
+        margin: 0 3px;
+      }
+      .score-divider {
+        width: 1px;
+        height: 32px;
+        background-color: var(--divider-color);
+        margin: 0 8px;
       }
       .score-number {
-        font-size: 1.5em;
+        font-size: 1.2em;
         font-weight: bold;
-        margin-bottom: 4px;
+        margin-bottom: 1px;
       }
       .score-label {
-        font-size: 0.8em;
+        font-size: 0.6em;
         color: var(--secondary-text-color);
         text-transform: uppercase;
+        font-weight: 500;
       }
       .kills {
         color: #4caf50;
@@ -529,148 +605,198 @@ class LoLStatusCard extends LitElement {
         display: flex;
         align-items: center;
         justify-content: center;
-        margin: 16px 0;
-        padding: 8px;
+        margin: 10px 0;
+        padding: 6px;
         background-color: rgba(255, 193, 7, 0.1);
-        border-radius: 8px;
+        border-radius: 6px;
         border: 1px solid rgba(255, 193, 7, 0.3);
       }
       .gold-icon {
         color: #ffc107;
-        margin-right: 8px;
+        margin-right: 6px;
       }
       .gold-amount {
-        font-size: 1.2em;
+        font-size: 1.1em;
         font-weight: bold;
         color: #ffc107;
       }
       .game-time {
         text-align: center;
-        font-size: 1.1em;
+        font-size: 1em;
         color: var(--primary-color);
         font-weight: 500;
+        margin-bottom: 8px;
       }
       .offline-message {
         text-align: center;
         color: var(--secondary-text-color);
         font-style: italic;
-        margin: 16px 0;
+        margin: 12px 0;
+        font-size: 0.9em;
       }
       .error {
         color: var(--error-color);
         text-align: center;
-        padding: 16px;
-      }
-      .section-title {
-        font-size: 0.9em;
-        font-weight: 600;
-        color: var(--primary-text-color);
-        margin-bottom: 8px;
-        text-transform: uppercase;
-        letter-spacing: 0.5px;
+        padding: 12px;
       }
       .summoner-spells {
-        margin-bottom: 16px;
-        padding: 12px;
+        margin-bottom: 12px;
+        padding: 8px;
         background-color: var(--card-background-color);
-        border-radius: 8px;
+        border-radius: 6px;
         border: 1px solid var(--divider-color);
       }
       .spells-container {
         display: flex;
-        gap: 12px;
+        gap: 8px;
         justify-content: center;
       }
       .spell-item {
         flex: 1;
-        text-align: center;
-        padding: 8px;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 4px;
+        padding: 6px 4px;
         background-color: rgba(103, 58, 183, 0.1);
-        border-radius: 6px;
+        border-radius: 4px;
         border: 1px solid rgba(103, 58, 183, 0.3);
+        min-height: 50px;
+      }
+      .spell-item.empty {
+        background-color: var(--disabled-color);
+        opacity: 0.3;
+        border-color: var(--divider-color);
+      }
+      .spell-key {
+        background-color: #673ab7;
+        color: white;
+        font-weight: bold;
+        font-size: 0.8em;
+        padding: 4px 6px;
+        border-radius: 3px;
+        min-width: 20px;
+        text-align: center;
+      }
+      .spell-info {
+        flex: 1;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        text-align: center;
       }
       .spell-name {
-        font-size: 0.9em;
+        font-size: 0.6em;
         font-weight: 500;
-        color: #673ab7;
+        color: var(--primary-text-color);
+        line-height: 1.1;
+        text-align: center;
       }
       .abilities-section {
-        margin-bottom: 16px;
-        padding: 12px;
+        margin-bottom: 12px;
+        padding: 8px;
         background-color: var(--card-background-color);
-        border-radius: 8px;
+        border-radius: 6px;
         border: 1px solid var(--divider-color);
       }
       .abilities-container {
-        display: grid;
-        grid-template-columns: 1fr 1fr;
-        gap: 8px;
+        display: flex;
+        gap: 6px;
+        justify-content: space-between;
       }
       .ability-item {
+        flex: 1;
         display: flex;
+        flex-direction: column;
         align-items: center;
-        gap: 8px;
-        padding: 6px 8px;
+        gap: 4px;
+        padding: 6px 3px;
         background-color: rgba(33, 150, 243, 0.1);
-        border-radius: 6px;
+        border-radius: 4px;
         border: 1px solid rgba(33, 150, 243, 0.3);
+        min-height: 50px;
+      }
+      .ability-item.empty {
+        background-color: var(--disabled-color);
+        opacity: 0.3;
+        border-color: var(--divider-color);
       }
       .ability-key {
         background-color: #2196f3;
         color: white;
         font-weight: bold;
-        font-size: 0.9em;
-        padding: 4px 8px;
-        border-radius: 4px;
+        font-size: 0.8em;
+        padding: 4px 6px;
+        border-radius: 3px;
         min-width: 20px;
         text-align: center;
+      }
+      .ability-key.passive {
+        background-color: #9c27b0;
+      }
+      .ability-key.ultimate {
+        background-color: #ff9800;
       }
       .ability-info {
         flex: 1;
         display: flex;
         flex-direction: column;
-        gap: 2px;
+        align-items: center;
+        gap: 1px;
+        text-align: center;
       }
       .ability-name {
-        font-size: 0.8em;
+        font-size: 0.6em;
         font-weight: 500;
         color: var(--primary-text-color);
-        line-height: 1.2;
+        line-height: 1.1;
+        text-align: center;
       }
       .ability-level {
-        font-size: 0.7em;
+        font-size: 0.55em;
         color: var(--secondary-text-color);
+        font-weight: 500;
       }
       .items-section {
-        margin-bottom: 16px;
-        padding: 12px;
+        margin-bottom: 12px;
+        padding: 8px;
         background-color: var(--card-background-color);
-        border-radius: 8px;
+        border-radius: 6px;
         border: 1px solid var(--divider-color);
       }
       .items-grid {
         display: grid;
-        grid-template-columns: repeat(3, 1fr);
-        gap: 8px;
+        grid-template-columns: repeat(6, 1fr) 0.8fr;
+        gap: 4px;
+        align-items: center;
       }
       .item-slot {
         aspect-ratio: 1;
-        border-radius: 6px;
+        border-radius: 4px;
         border: 2px solid var(--divider-color);
         display: flex;
         flex-direction: column;
         align-items: center;
         justify-content: center;
-        padding: 4px;
+        padding: 3px;
         text-align: center;
         position: relative;
         background-color: var(--primary-background-color);
         transition: all 0.2s ease;
       }
+      .item-slot.trinket {
+        border-color: #9c27b0;
+        background-color: rgba(156, 39, 176, 0.05);
+      }
+      .item-slot.trinket.empty {
+        border-color: rgba(156, 39, 176, 0.3);
+        background-color: rgba(156, 39, 176, 0.1);
+      }
       .item-slot:hover {
         border-color: var(--primary-color);
-        transform: translateY(-2px);
-        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+        transform: translateY(-1px);
+        box-shadow: 0 1px 6px rgba(0, 0, 0, 0.2);
       }
       .item-slot.empty {
         background-color: var(--disabled-color);
@@ -681,8 +807,11 @@ class LoLStatusCard extends LitElement {
         box-shadow: none;
         border-color: var(--divider-color);
       }
+      .item-slot.trinket.empty:hover {
+        border-color: rgba(156, 39, 176, 0.3);
+      }
       .item-name {
-        font-size: 0.7em;
+        font-size: 0.6em;
         font-weight: 500;
         color: var(--primary-text-color);
         line-height: 1.1;
@@ -692,59 +821,73 @@ class LoLStatusCard extends LitElement {
         -webkit-line-clamp: 2;
         -webkit-box-orient: vertical;
       }
-      .item-count {
+      .item-key {
         position: absolute;
-        bottom: 2px;
-        right: 2px;
-        background-color: var(--primary-color);
+        top: 2px;
+        left: 2px;
+        background-color: rgba(0, 0, 0, 0.7);
         color: white;
         font-size: 0.6em;
         font-weight: bold;
-        padding: 1px 4px;
-        border-radius: 3px;
-        min-width: 12px;
+        padding: 1px 3px;
+        border-radius: 2px;
+        min-width: 8px;
+        text-align: center;
+        line-height: 1;
+      }
+      .item-count {
+        position: absolute;
+        bottom: 1px;
+        right: 1px;
+        background-color: var(--primary-color);
+        color: white;
+        font-size: 0.55em;
+        font-weight: bold;
+        padding: 1px 3px;
+        border-radius: 2px;
+        min-width: 10px;
         text-align: center;
       }
       .runes-section {
-        margin-bottom: 16px;
-        padding: 12px;
+        margin-bottom: 12px;
+        padding: 8px;
         background-color: var(--card-background-color);
-        border-radius: 8px;
+        border-radius: 6px;
         border: 1px solid var(--divider-color);
       }
       .runes-container {
         display: flex;
         flex-direction: column;
-        gap: 12px;
+        gap: 8px;
       }
       .keystone-rune {
         text-align: center;
-        padding: 8px;
+        padding: 6px;
         background-color: rgba(255, 193, 7, 0.1);
         border: 1px solid rgba(255, 193, 7, 0.3);
-        border-radius: 6px;
+        border-radius: 4px;
       }
       .rune-trees {
         display: flex;
-        gap: 8px;
+        gap: 6px;
       }
       .rune-tree {
         flex: 1;
         text-align: center;
-        padding: 6px;
+        padding: 4px;
         background-color: rgba(156, 39, 176, 0.1);
         border: 1px solid rgba(156, 39, 176, 0.3);
-        border-radius: 6px;
+        border-radius: 4px;
       }
       .rune-type {
-        font-size: 0.7em;
+        font-size: 0.6em;
         color: var(--secondary-text-color);
         text-transform: uppercase;
         font-weight: 500;
-        margin-bottom: 2px;
+        margin-bottom: 1px;
       }
       .rune-name {
-        font-size: 0.8em;
+        font-size: 0.7em;
         font-weight: 500;
         color: var(--primary-text-color);
       }
