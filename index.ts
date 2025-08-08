@@ -1,5 +1,13 @@
 #!/usr/bin/env bun
 
+/**
+ * Main Application Entry Point
+ *
+ * Orchestrates the Home Assistant Agent for macOS, coordinating multiple status readers
+ * (battery, display, League of Legends) and publishing their data to Home Assistant via MQTT.
+ * Handles configuration validation, graceful shutdown, and optional auto-updates.
+ */
+
 import { hostname } from "os";
 import * as winston from "winston";
 import { z } from "zod";

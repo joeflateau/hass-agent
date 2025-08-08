@@ -1,3 +1,11 @@
+/**
+ * Display Status Reader
+ *
+ * Monitors macOS display configuration and status using system_profiler.
+ * Tracks internal display state, external display count, and overall display status
+ * for Home Assistant automation and presence detection.
+ */
+
 import * as winston from "winston";
 import { executeCommand } from "./command-utils.ts";
 

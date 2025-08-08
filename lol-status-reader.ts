@@ -1,3 +1,11 @@
+/**
+ * League of Legends Status Reader
+ *
+ * Monitors League of Legends game state via the Riot Client API.
+ * Tracks game mode, champion selection, match progress, and player statistics
+ * for Home Assistant gaming status integration and automation.
+ */
+
 import * as winston from "winston";
 import { z } from "zod";
 import { Api } from "./lol-client/Api.ts";

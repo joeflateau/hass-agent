@@ -1,3 +1,10 @@
+/**
+ * Battery Data Parser
+ *
+ * Parses raw pmset output and structured battery information from macOS system commands.
+ * Handles battery level, charging state, time estimates, power source, and battery health data.
+ */
+
 // Battery parsing utilities for macOS pmset rawlog output
 
 export interface BatteryInfo {

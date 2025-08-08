@@ -1,3 +1,10 @@
+/**
+ * Command Execution Utilities
+ *
+ * Provides utility functions for executing shell commands with proper error handling.
+ * Used throughout the application for running macOS system commands like pmset and system_profiler.
+ */
+
 import { spawn, type SpawnOptions } from "child_process";
 
 /**

@@ -1,3 +1,11 @@
+/**
+ * Auto-Updater Service
+ *
+ * Manages automatic updates for the Home Assistant Agent.
+ * Checks for new versions periodically and executes update scripts
+ * when newer versions are available.
+ */
+
 import * as winston from "winston";
 import { executeCommand } from "./command-utils.ts";
 

@@ -1,3 +1,11 @@
+/**
+ * MQTT Publisher
+ *
+ * Handles MQTT communication with Home Assistant using the Auto Discovery protocol.
+ * Manages device registration, entity publishing, and maintains MQTT connections
+ * for all sensor data from the various status readers.
+ */
+
 import * as mqtt from "mqtt";
 import * as winston from "winston";
 

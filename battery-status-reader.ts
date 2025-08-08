@@ -1,3 +1,11 @@
+/**
+ * Battery Status Reader
+ *
+ * Monitors macOS battery and power status using pmset commands.
+ * Provides real-time battery level, charging status, power source information,
+ * and system uptime data for Home Assistant integration.
+ */
+
 import { spawn, type ChildProcess } from "child_process";
 import * as readline from "readline";
 import * as winston from "winston";
