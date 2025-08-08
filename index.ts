@@ -5,10 +5,7 @@ import * as winston from "winston";
 import { z } from "zod";
 import { AutoUpdater, type AutoUpdaterConfig } from "./auto-updater.ts";
 import { BatteryStatusReader } from "./battery-status-reader.ts";
-import {
-  DisplayStatusReader,
-  type DisplayInfo,
-} from "./display-status-reader.ts";
+import { DisplayStatusReader } from "./display-status-reader.ts";
 import { LoLStatusReader } from "./lol-status-reader.ts";
 import {
   MqttDeviceFramework,
@@ -409,15 +406,6 @@ class MacOSPowerAgent {
     });
   }
 
-  // Public getters for testing backward compatibility
-  public async getDisplayStatus() {
-    return this.displayReader.getDisplayStatus();
-  }
-
-  public async getDetailedDisplayInfo() {
-    return this.displayReader.getDetailedDisplayInfo();
-  }
-
   public async initialize(): Promise<void> {
     // Wait for MQTT connection before starting monitoring
     await this.mqttFramework.connect();
@@ -554,7 +542,7 @@ async function main() {
 }
 
 // Export for testing
-export { getComputerName, MacOSPowerAgent, type DisplayInfo };
+export { getComputerName, MacOSPowerAgent };
 
 // Start the application only when this file is run directly
 if (import.meta.main) {
