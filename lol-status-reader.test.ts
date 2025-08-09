@@ -268,6 +268,7 @@ describe("LoLStatusReader", () => {
     expect(status.mapNumber).toBe(11);
     expect(status.activePlayerName).toBe("TestPlayer");
     expect(status.championName).toBe("Jinx");
+    expect(status.championImageUrl).toEqual(expect.any(String));
     expect(status.level).toBe(12);
     expect(status.currentGold).toBe(4500);
     expect(status.team).toBe("ORDER");
@@ -283,11 +284,13 @@ describe("LoLStatusReader", () => {
         displayName: "Flash",
         rawDescription:
           "Teleports your champion a short distance toward your cursor's location.",
+        imageUrl: expect.any(String),
       },
       summonerSpellTwo: {
         displayName: "Heal",
         rawDescription:
           "Restores Health to you and your most wounded nearby ally.",
+        imageUrl: expect.any(String),
       },
     });
     expect(status.items).toEqual([
@@ -301,6 +304,7 @@ describe("LoLStatusReader", () => {
         rawDescription: "+8 Attack Damage +80 Health +3% Life Steal",
         rawDisplayName: "Item_1055_Name",
         slot: 0,
+        imageUrl: expect.any(String),
       },
       {
         canUse: true,
@@ -312,6 +316,7 @@ describe("LoLStatusReader", () => {
         rawDescription: "Restores 150 Health over 15 seconds.",
         rawDisplayName: "Item_2003_Name",
         slot: 1,
+        imageUrl: expect.any(String),
       },
     ]);
   });
@@ -707,14 +712,17 @@ describe("LoLStatusReader", () => {
     expect(status.isInGame).toBe(true);
     expect(status.activePlayerName).toBe("TestPlayer");
     expect(status.championName).toBe("Graves");
+    expect(status.championImageUrl).toEqual(expect.any(String));
     expect(status.summonerSpells).toEqual({
       summonerSpellOne: {
         displayName: "Teleport",
         rawDescription: "Teleports your champion to target location.",
+        imageUrl: expect.any(String),
       },
       summonerSpellTwo: {
         displayName: "Smite",
         rawDescription: "Deals true damage to target monster or minion.",
+        imageUrl: expect.any(String),
       },
     });
     expect(status.score).toEqual({

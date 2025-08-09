@@ -8,6 +8,7 @@
 
 import * as winston from "winston";
 import { z } from "zod";
+import { dataDragon } from "./data-dragon-loader.ts";
 import { Api } from "./lol-client/Api.ts";
 
 // Zod schemas for API responses
@@ -150,6 +151,7 @@ export interface PlayerInfo {
   summonerName?: string;
   championName: string;
   rawChampionName?: string;
+  championImageUrl?: string;
   skinName?: string;
   rawSkinName?: string;
   skinID?: number;
@@ -170,10 +172,12 @@ export interface PlayerInfo {
     summonerSpellOne?: {
       displayName: string;
       rawDescription: string;
+      imageUrl?: string;
     };
     summonerSpellTwo?: {
       displayName: string;
       rawDescription: string;
+      imageUrl?: string;
     };
   };
   items?: Array<{
@@ -186,6 +190,7 @@ export interface PlayerInfo {
     rawDescription: string;
     rawDisplayName?: string;
     slot: number;
+    imageUrl?: string;
   }>;
   runes?: {
     keystone: {
@@ -193,18 +198,21 @@ export interface PlayerInfo {
       id: number;
       rawDescription: string;
       rawDisplayName: string;
+      imageUrl?: string;
     };
     primaryRuneTree: {
       displayName: string;
       id: number;
       rawDescription: string;
       rawDisplayName: string;
+      imageUrl?: string;
     };
     secondaryRuneTree: {
       displayName: string;
       id: number;
       rawDescription: string;
       rawDisplayName: string;
+      imageUrl?: string;
     };
   };
 }
@@ -220,6 +228,7 @@ export interface LoLGameStatus {
   riotIdTagLine?: string;
   championName?: string;
   rawChampionName?: string;
+  championImageUrl?: string;
   skinName?: string;
   rawSkinName?: string;
   skinID?: number;
@@ -274,10 +283,12 @@ export interface LoLGameStatus {
     summonerSpellOne?: {
       displayName: string;
       rawDescription: string;
+      imageUrl?: string;
     };
     summonerSpellTwo?: {
       displayName: string;
       rawDescription: string;
+      imageUrl?: string;
     };
   };
   abilities?: Record<
@@ -287,6 +298,7 @@ export interface LoLGameStatus {
       displayName: string;
       rawDescription: string;
       rawDisplayName: string;
+      imageUrl?: string;
     }
   >;
   items?: Array<{
@@ -299,6 +311,7 @@ export interface LoLGameStatus {
     rawDescription: string;
     rawDisplayName?: string;
     slot: number;
+    imageUrl?: string;
   }>;
   runes?: {
     keystone: {
@@ -306,18 +319,21 @@ export interface LoLGameStatus {
       id: number;
       rawDescription: string;
       rawDisplayName: string;
+      imageUrl?: string;
     };
     primaryRuneTree: {
       displayName: string;
       id: number;
       rawDescription: string;
       rawDisplayName: string;
+      imageUrl?: string;
     };
     secondaryRuneTree: {
       displayName: string;
       id: number;
       rawDescription: string;
       rawDisplayName: string;
+      imageUrl?: string;
     };
   };
 }
@@ -378,6 +394,158 @@ export class LoLStatusReader {
         }
       );
       throw parseError;
+    }
+  }
+
+  /**
+   * Enrich game status with Data Dragon image URLs
+   */
+  private async enrichWithImageUrls(
+    status: LoLGameStatus
+  ): Promise<LoLGameStatus> {
+    try {
+      const isDataAvailable = await dataDragon.isDataAvailable();
+      if (!isDataAvailable) {
+        this.logger.debug(
+          "Data Dragon data not available, skipping image URL enrichment"
+        );
+        return status;
+      }
+
+      // Add champion image URL
+      if (status.championName) {
+        const imageUrl = await dataDragon.getChampionImageUrl(
+          status.championName
+        );
+        if (imageUrl) status.championImageUrl = imageUrl;
+      }
+
+      // Add summoner spell image URLs
+      if (status.summonerSpells) {
+        if (status.summonerSpells.summonerSpellOne) {
+          const imageUrl = await dataDragon.getSummonerSpellImageUrl(
+            status.summonerSpells.summonerSpellOne.displayName
+          );
+          if (imageUrl)
+            status.summonerSpells.summonerSpellOne.imageUrl = imageUrl;
+        }
+        if (status.summonerSpells.summonerSpellTwo) {
+          const imageUrl = await dataDragon.getSummonerSpellImageUrl(
+            status.summonerSpells.summonerSpellTwo.displayName
+          );
+          if (imageUrl)
+            status.summonerSpells.summonerSpellTwo.imageUrl = imageUrl;
+        }
+      }
+
+      // Add item image URLs
+      if (status.items) {
+        for (const item of status.items) {
+          const imageUrl = await dataDragon.getItemImageUrl(item.itemID);
+          if (imageUrl) item.imageUrl = imageUrl;
+        }
+      }
+
+      // Add rune image URLs
+      if (status.runes) {
+        const keystoneImageUrl = await dataDragon.getRuneImageUrl(
+          status.runes.keystone.id
+        );
+        if (keystoneImageUrl) status.runes.keystone.imageUrl = keystoneImageUrl;
+
+        const primaryImageUrl = await dataDragon.getRuneImageUrl(
+          status.runes.primaryRuneTree.id
+        );
+        if (primaryImageUrl)
+          status.runes.primaryRuneTree.imageUrl = primaryImageUrl;
+
+        const secondaryImageUrl = await dataDragon.getRuneImageUrl(
+          status.runes.secondaryRuneTree.id
+        );
+        if (secondaryImageUrl)
+          status.runes.secondaryRuneTree.imageUrl = secondaryImageUrl;
+      }
+
+      // Enrich teammates and enemies
+      if (status.teammates) {
+        for (const teammate of status.teammates) {
+          await this.enrichPlayerWithImageUrls(teammate);
+        }
+      }
+
+      if (status.enemies) {
+        for (const enemy of status.enemies) {
+          await this.enrichPlayerWithImageUrls(enemy);
+        }
+      }
+
+      return status;
+    } catch (error) {
+      this.logger.debug(`Failed to enrich with image URLs: ${error}`);
+      return status; // Return original status if enrichment fails
+    }
+  }
+
+  /**
+   * Enrich individual player info with image URLs
+   */
+  private async enrichPlayerWithImageUrls(player: PlayerInfo): Promise<void> {
+    try {
+      // Champion image
+      if (player.championName) {
+        const imageUrl = await dataDragon.getChampionImageUrl(
+          player.championName
+        );
+        if (imageUrl) player.championImageUrl = imageUrl;
+      }
+
+      // Summoner spells
+      if (player.summonerSpells) {
+        if (player.summonerSpells.summonerSpellOne) {
+          const imageUrl = await dataDragon.getSummonerSpellImageUrl(
+            player.summonerSpells.summonerSpellOne.displayName
+          );
+          if (imageUrl)
+            player.summonerSpells.summonerSpellOne.imageUrl = imageUrl;
+        }
+        if (player.summonerSpells.summonerSpellTwo) {
+          const imageUrl = await dataDragon.getSummonerSpellImageUrl(
+            player.summonerSpells.summonerSpellTwo.displayName
+          );
+          if (imageUrl)
+            player.summonerSpells.summonerSpellTwo.imageUrl = imageUrl;
+        }
+      }
+
+      // Items
+      if (player.items) {
+        for (const item of player.items) {
+          const imageUrl = await dataDragon.getItemImageUrl(item.itemID);
+          if (imageUrl) item.imageUrl = imageUrl;
+        }
+      }
+
+      // Runes
+      if (player.runes) {
+        const keystoneImageUrl = await dataDragon.getRuneImageUrl(
+          player.runes.keystone.id
+        );
+        if (keystoneImageUrl) player.runes.keystone.imageUrl = keystoneImageUrl;
+
+        const primaryImageUrl = await dataDragon.getRuneImageUrl(
+          player.runes.primaryRuneTree.id
+        );
+        if (primaryImageUrl)
+          player.runes.primaryRuneTree.imageUrl = primaryImageUrl;
+
+        const secondaryImageUrl = await dataDragon.getRuneImageUrl(
+          player.runes.secondaryRuneTree.id
+        );
+        if (secondaryImageUrl)
+          player.runes.secondaryRuneTree.imageUrl = secondaryImageUrl;
+      }
+    } catch (error) {
+      this.logger.debug(`Failed to enrich player with image URLs: ${error}`);
     }
   }
 
@@ -685,6 +853,9 @@ export class LoLStatusReader {
           "Could not fetch player list for detailed player info"
         );
       }
+
+      // Enrich with Data Dragon image URLs
+      status = await this.enrichWithImageUrls(status);
 
       return status;
     } catch (error) {

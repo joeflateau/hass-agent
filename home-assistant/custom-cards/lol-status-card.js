@@ -45,6 +45,7 @@ class LoLStatusCard extends LitElement {
       ? Math.floor(attributes.gameTime / 60)
       : null;
     const championName = attributes.championName || "N/A";
+    const championImageUrl = attributes.championImageUrl || null;
     const skinName = attributes.skinName || null;
     const level = attributes.level || "N/A";
     const currentGold = attributes.currentGold || 0;
@@ -161,22 +162,35 @@ class LoLStatusCard extends LitElement {
               ${championName !== "N/A"
                 ? html`
                     <div class="champion-info">
-                      <div class="champion-name">${championName}</div>
-                      ${skinName
-                        ? html`<div class="skin-name">${skinName}</div>`
+                      ${championImageUrl
+                        ? html`
+                            <div class="champion-image">
+                              <img
+                                src="${championImageUrl}"
+                                alt="${championName}"
+                                title="${championName}"
+                              />
+                            </div>
+                          `
                         : ""}
-                      <div class="champion-details">
-                        <span class="champion-level">Level ${level}</span>
-                        ${position
-                          ? html`<span class="position">${position}</span>`
+                      <div class="champion-details-text">
+                        <div class="champion-name">${championName}</div>
+                        ${skinName
+                          ? html`<div class="skin-name">${skinName}</div>`
                           : ""}
-                        ${team ? html`<span class="team">${team}</span>` : ""}
+                        <div class="champion-details">
+                          <span class="champion-level">Level ${level}</span>
+                          ${position
+                            ? html`<span class="position">${position}</span>`
+                            : ""}
+                          ${team ? html`<span class="team">${team}</span>` : ""}
+                        </div>
+                        ${isDead
+                          ? html`<div class="death-timer">
+                              💀 Respawn: ${Math.floor(respawnTimer)}s
+                            </div>`
+                          : ""}
                       </div>
-                      ${isDead
-                        ? html`<div class="death-timer">
-                            💀 Respawn: ${Math.floor(respawnTimer)}s
-                          </div>`
-                        : ""}
                     </div>
                   `
                 : ""}
@@ -188,6 +202,20 @@ class LoLStatusCard extends LitElement {
                         ${summonerSpells.summonerSpellOne
                           ? html`
                               <div class="spell-item">
+                                ${summonerSpells.summonerSpellOne.imageUrl
+                                  ? html`
+                                      <div class="spell-image">
+                                        <img
+                                          src="${summonerSpells.summonerSpellOne
+                                            .imageUrl}"
+                                          alt="${summonerSpells.summonerSpellOne
+                                            .displayName}"
+                                          title="${summonerSpells
+                                            .summonerSpellOne.displayName}"
+                                        />
+                                      </div>
+                                    `
+                                  : ""}
                                 <div class="spell-key">D</div>
                                 <div class="spell-info">
                                   <div class="spell-name">
@@ -201,6 +229,20 @@ class LoLStatusCard extends LitElement {
                         ${summonerSpells.summonerSpellTwo
                           ? html`
                               <div class="spell-item">
+                                ${summonerSpells.summonerSpellTwo.imageUrl
+                                  ? html`
+                                      <div class="spell-image">
+                                        <img
+                                          src="${summonerSpells.summonerSpellTwo
+                                            .imageUrl}"
+                                          alt="${summonerSpells.summonerSpellTwo
+                                            .displayName}"
+                                          title="${summonerSpells
+                                            .summonerSpellTwo.displayName}"
+                                        />
+                                      </div>
+                                    `
+                                  : ""}
                                 <div class="spell-key">F</div>
                                 <div class="spell-info">
                                   <div class="spell-name">
@@ -419,12 +461,27 @@ class LoLStatusCard extends LitElement {
         color: var(--primary-text-color);
       }
       .champion-info {
-        text-align: center;
+        display: flex;
+        align-items: center;
+        gap: 12px;
         margin-bottom: 12px;
         padding: 8px;
         background-color: var(--card-background-color);
         border-radius: 6px;
         border: 1px solid var(--divider-color);
+      }
+      .champion-image {
+        flex-shrink: 0;
+      }
+      .champion-image img {
+        width: 48px;
+        height: 48px;
+        border-radius: 6px;
+        object-fit: cover;
+        border: 2px solid var(--primary-color);
+      }
+      .champion-details-text {
+        flex: 1;
       }
       .champion-name {
         font-size: 1.2em;
@@ -441,7 +498,6 @@ class LoLStatusCard extends LitElement {
       .champion-details {
         display: flex;
         gap: 8px;
-        justify-content: center;
         flex-wrap: wrap;
       }
       .champion-level {
@@ -598,6 +654,16 @@ class LoLStatusCard extends LitElement {
         opacity: 0.3;
         border-color: var(--divider-color);
       }
+      .spell-image {
+        margin-bottom: 2px;
+      }
+      .spell-image img {
+        width: 32px;
+        height: 32px;
+        border-radius: 4px;
+        object-fit: cover;
+        border: 1px solid rgba(103, 58, 183, 0.5);
+      }
       .spell-key {
         background-color: #673ab7;
         color: white;
@@ -738,6 +804,17 @@ class ItemSlot extends LitElement {
         class="item-slot ${this.isTrinket ? "trinket" : ""}"
         title="${this.item.rawDescription || this.item.displayName}"
       >
+        ${this.item.imageUrl
+          ? html`
+              <div class="item-image">
+                <img
+                  src="${this.item.imageUrl}"
+                  alt="${this.item.displayName}"
+                  title="${this.item.displayName}"
+                />
+              </div>
+            `
+          : ""}
         ${this.item.canUse
           ? html`<div class="item-key">
               ${this.item.slot === 6
@@ -800,6 +877,16 @@ class ItemSlot extends LitElement {
       }
       .item-slot.trinket.empty:hover {
         border-color: rgba(156, 39, 176, 0.3);
+      }
+      .item-image {
+        margin-bottom: 2px;
+      }
+      .item-image img {
+        width: 36px;
+        height: 36px;
+        border-radius: 3px;
+        object-fit: cover;
+        border: 1px solid var(--divider-color);
       }
       .item-name {
         font-size: 0.6em;
@@ -872,16 +959,33 @@ class PlayerItem extends LitElement {
 
     return html`
       <div class="player-item">
-        <div class="player-champion">${this.player.championName}</div>
-        <div class="player-name">
-          ${this.player.riotIdGameName || this.player.summonerName || "Unknown"}
+        ${this.player.championImageUrl
+          ? html`
+              <div class="player-champion-image">
+                <img
+                  src="${this.player.championImageUrl}"
+                  alt="${this.player.championName}"
+                  title="${this.player.championName}"
+                />
+              </div>
+            `
+          : ""}
+        <div class="player-info">
+          <div class="player-champion">${this.player.championName}</div>
+          <div class="player-name">
+            ${this.player.riotIdGameName ||
+            this.player.summonerName ||
+            "Unknown"}
+          </div>
         </div>
-        <div class="player-level">Lv ${this.player.level || "?"}</div>
-        <div class="player-score">
-          ${this.player.scores.kills}/${this.player.scores.deaths}/${this.player
-            .scores.assists}
+        <div class="player-stats">
+          <div class="player-level">Lv ${this.player.level || "?"}</div>
+          <div class="player-score">
+            ${this.player.scores.kills}/${this.player.scores.deaths}/${this
+              .player.scores.assists}
+          </div>
+          <div class="player-cs">${this.player.scores.creepScore} CS</div>
         </div>
-        <div class="player-cs">${this.player.scores.creepScore} CS</div>
         ${this.player.isDead
           ? html`
               <div class="player-status dead">
@@ -898,56 +1002,68 @@ class PlayerItem extends LitElement {
       .player-item {
         display: flex;
         align-items: center;
-        justify-content: space-between;
         padding: 4px 6px;
         background-color: var(--card-background-color);
         border-radius: 4px;
         border: 1px solid var(--divider-color);
         gap: 8px;
       }
+      .player-champion-image {
+        flex-shrink: 0;
+      }
+      .player-champion-image img {
+        width: 32px;
+        height: 32px;
+        border-radius: 4px;
+        object-fit: cover;
+        border: 1px solid var(--primary-color);
+      }
+      .player-info {
+        flex: 1;
+        min-width: 0;
+      }
       .player-champion {
         font-size: 0.7em;
         font-weight: 600;
         color: var(--primary-text-color);
-        min-width: 60px;
-        flex-shrink: 0;
+        line-height: 1.1;
       }
       .player-name {
         font-size: 0.65em;
         color: var(--secondary-text-color);
-        flex: 1;
         overflow: hidden;
         text-overflow: ellipsis;
         white-space: nowrap;
+        line-height: 1.1;
+      }
+      .player-stats {
+        display: flex;
+        flex-direction: column;
+        align-items: flex-end;
+        gap: 2px;
+        flex-shrink: 0;
       }
       .player-level {
         font-size: 0.6em;
         color: var(--primary-color);
         font-weight: 600;
-        min-width: 30px;
-        text-align: center;
-        flex-shrink: 0;
+        text-align: right;
       }
       .player-score {
         font-size: 0.65em;
         font-weight: 500;
         color: var(--primary-text-color);
-        min-width: 40px;
-        text-align: center;
-        flex-shrink: 0;
+        text-align: right;
       }
       .player-cs {
         font-size: 0.6em;
         color: var(--secondary-text-color);
-        min-width: 35px;
-        text-align: center;
-        flex-shrink: 0;
+        text-align: right;
       }
       .player-status.dead {
         font-size: 0.6em;
         color: #ff5722;
         font-weight: 500;
-        min-width: 35px;
         text-align: center;
         flex-shrink: 0;
       }
