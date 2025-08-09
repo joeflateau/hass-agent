@@ -13,9 +13,9 @@
     "build:x64": "bun build --compile --minify --sourcemap ./index.ts --outfile hass-agent-x64 --target bun-darwin-x64",
     "build:universal": "npm run build:arm64 && npm run build:x64 && lipo -create -output hass-agent hass-agent-arm64 hass-agent-x64",
     "start": "./hass-agent",
-    "test": "bun test",
+    "test": "bun run ensure-data-dragon && bun test",
+    "test:raw": "bun test",
     "test:watch": "bun test --watch",
-    "pretest": "npm run ensure-data-dragon",
     "ensure-data-dragon": "bun run scripts/ensure-data-dragon.ts",
     "update-data-dragon": "./hass-agent update-data-dragon",
     "release": "scripts/tag-release.sh ${RELEASE_TYPE:-patch}"

@@ -23,7 +23,7 @@ jobs:
         run: bun install
 
       - name: Run tests
-        run: bun test
+        run: npm test
 
       - name: Type check
         run: bun run tsc --noEmit

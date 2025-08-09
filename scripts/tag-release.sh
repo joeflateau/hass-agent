@@ -53,7 +53,7 @@ fi
 
 # Run tests before creating the release
 echo "Running tests..."
-if ! bun test; then
+if ! npm run test; then
   echo "Tests failed. Cannot create release."
   exit 1
 fi
