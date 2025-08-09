@@ -213,6 +213,16 @@ log_info "Installing executable to $INSTALL_DIR..."
 cp hass-agent "$INSTALL_DIR/"
 chmod +x "$INSTALL_DIR/hass-agent"
 
+# Update Data Dragon data if possible
+log_info "Updating League of Legends Data Dragon data..."
+cd "$CONFIG_DIR"
+if "$INSTALL_DIR/hass-agent" update-data-dragon; then
+    log_success "Data Dragon data updated successfully"
+else
+    log_warning "Failed to update Data Dragon data (will retry at runtime)"
+fi
+cd "$TEMP_DIR"
+
 # Load the service
 log_info "Starting service..."
 launchctl load "$PLIST_PATH"
@@ -240,6 +250,7 @@ echo "   🛑 Stop:    launchctl unload '$PLIST_PATH'"
 echo "   ▶️  Start:   launchctl load '$PLIST_PATH'"
 echo "   🔄 Restart: launchctl unload '$PLIST_PATH' && launchctl load '$PLIST_PATH'"
 echo "   📊 Status:  launchctl list | grep $SERVICE_NAME"
+echo "   🎮 Update LoL data: '$INSTALL_DIR/hass-agent update-data-dragon'"
 echo ""
 
 # Check if service is running
@@ -256,4 +267,5 @@ if [[ "$IS_UPGRADE" == "false" ]]; then
     echo "   1. Edit $CONFIG_DIR/.env with your MQTT broker settings"
     echo "   2. Restart the service if you made configuration changes"
     echo "   3. Check Home Assistant for new device entities"
+    echo "   4. Update LoL data anytime with: $INSTALL_DIR/hass-agent update-data-dragon"
 fi

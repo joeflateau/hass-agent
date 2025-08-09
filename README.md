@@ -277,7 +277,7 @@ The agent automatically registers the following entities in Home Assistant:
 
 ## League of Legends Integration
 
-The agent automatically monitors League of Legends Game Client API (https://127.0.0.1:2999) when available:
+The agent automatically monitors League of Legends Game Client API (https://127.0.0.1:2999) when available and includes Data Dragon integration for enhanced data:
 
 ### Features
 
@@ -287,6 +287,7 @@ The agent automatically monitors League of Legends Game Client API (https://127.
 - **Game Status**: Tracks if you're currently in a game
 - **Match Details**: Game mode, map, game time
 - **Player Stats**: Champion, level, gold, K/D/A
+- **Static Data Integration**: Champion, item, spell, and rune metadata via Data Dragon API
 - **No Configuration Required**: Works automatically when League of Legends is running
 
 ### Supported Game Data
@@ -299,6 +300,23 @@ The agent automatically monitors League of Legends Game Client API (https://127.
 - Current level and gold
 - Kill/Death/Assist scores
 - Team assignment
+
+### Data Dragon Integration
+
+The agent includes utilities for fetching and caching static League of Legends data:
+
+- **Champions**: Names, abilities, stats, and images
+- **Items**: Descriptions, stats, build paths, and images
+- **Summoner Spells**: Descriptions, cooldowns, and images
+- **Runes**: Descriptions, stats, and images
+
+Update static data with:
+
+```bash
+hass-agent update-data-dragon
+```
+
+This fetches the latest game data from Riot's Data Dragon API and caches it locally.
 
 > **Note**: The League of Legends Game Client API is only available when you're in an active game. When not in-game, the API is offline, and the agent will show "not in game" status - this is expected behavior.
 
@@ -386,15 +404,23 @@ bun test --coverage
 - `bun run start` - Run built executable
 - `bun test` - Run test suite
 - `bun test --watch` - Run tests in watch mode
+- `./hass-agent update-data-dragon` - Update League of Legends static data from Riot's Data Dragon API
 
 ### Project Structure
 
 ```
 hass-agent/
-├── index.ts              # Main application code
-├── package.json          # Project configuration
-├── tsconfig.json         # TypeScript configuration
-├── .env.example          # Environment variables template
+├── index.ts                           # Main application with command support
+├── lol-status-reader.ts               # League of Legends game state monitoring
+├── data-dragon-updater.ts             # Data Dragon API client (embedded)
+├── data-dragon-loader.ts              # Data Dragon static data access
+├── package.json                       # Project configuration
+├── tsconfig.json                      # TypeScript configuration
+├── .env.example                       # Environment variables template
+├── data/
+│   └── ddragon/                       # Cached Data Dragon data (local only)
+├── home-assistant/
+│   └── custom-cards/                  # Home Assistant UI components
 ├── .github/
 │   └── copilot-instructions.md
 └── README.md

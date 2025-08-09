@@ -6,9 +6,14 @@
  * Orchestrates the Home Assistant Agent for macOS, coordinating multiple status readers
  * (battery, display, League of Legends) and publishing their data to Home Assistant via MQTT.
  * Handles configuration validation, graceful shutdown, and optional auto-updates.
+ *
+ * Commands:
+ * - (default): Run the main agent
+ * - update-data-dragon: Update League of Legends static data from Riot's Data Dragon API
  */
 
 import { hostname } from "os";
+import { join } from "path";
 import * as winston from "winston";
 import { z } from "zod";
 import { AutoUpdater, type AutoUpdaterConfig } from "./auto-updater.ts";
@@ -17,6 +22,7 @@ import {
   BatteryStatusReader,
   type UptimeInfo,
 } from "./battery-status-reader.ts";
+import { updateDataDragon } from "./data-dragon-updater.ts";
 import {
   DisplayStatusReader,
   type DisplayInfo,
@@ -515,8 +521,84 @@ class MacOSPowerAgent {
   }
 }
 
+// Command line argument parsing
+function parseCommand(): { command: string; args: string[] } {
+  const args = process.argv.slice(2);
+  const command = args[0] || "run";
+  const commandArgs = args.slice(1);
+  return { command, args: commandArgs };
+}
+
+// Show help message
+function showHelp(): void {
+  console.log(`
+macOS Home Assistant Agent v${
+    typeof VERSION !== "undefined" ? VERSION : "development"
+  }
+
+Usage: hass-agent [command] [options]
+
+Commands:
+  run                    Start the Home Assistant agent (default)
+  update-data-dragon     Update League of Legends static data from Riot's Data Dragon API
+  help, --help, -h       Show this help message
+
+Examples:
+  hass-agent                    # Start the agent
+  hass-agent run               # Start the agent (explicit)
+  hass-agent update-data-dragon # Update LoL data
+  hass-agent --help            # Show help
+
+Environment Variables:
+  MQTT_BROKER              MQTT broker URL (default: mqtt://localhost:1883)
+  MQTT_USERNAME            MQTT username (optional)
+  MQTT_PASSWORD            MQTT password (optional)
+  DEVICE_ID                Unique device identifier (required)
+  DEVICE_NAME              Device display name (default: computer name)
+  UPDATE_INTERVAL          Update interval in ms (default: 30000)
+  AUTO_UPGRADE             Enable auto-upgrades (default: true)
+  LOG_LEVEL                Log level (default: info)
+
+For more information, see: https://github.com/joeflateau/hass-agent
+`);
+}
+
+// Handle the update-data-dragon command
+async function handleUpdateDataDragon(): Promise<void> {
+  try {
+    const dataDir = join(process.cwd(), "data", "ddragon");
+    await updateDataDragon(dataDir, logger);
+    process.exit(0);
+  } catch (error) {
+    logger.error(`Failed to update Data Dragon data: ${error}`);
+    process.exit(1);
+  }
+}
+
 // Main async function
 async function main() {
+  const { command, args } = parseCommand();
+
+  // Handle help command
+  if (command === "help" || command === "--help" || command === "-h") {
+    showHelp();
+    return;
+  }
+
+  // Handle update-data-dragon command
+  if (command === "update-data-dragon") {
+    await handleUpdateDataDragon();
+    return;
+  }
+
+  // Handle unknown commands
+  if (command !== "run") {
+    logger.error(`Unknown command: ${command}`);
+    logger.info("Use 'hass-agent --help' for usage information");
+    process.exit(1);
+  }
+
+  // Continue with the main agent logic for 'run' command
   // Parse and validate environment variables
   let config: z.infer<typeof envSchema>;
   try {

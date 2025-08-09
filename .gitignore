@@ -61,6 +61,9 @@ pids
 tmp/
 temp/
 
+# Data Dragon cache (downloaded static data)
+data/ddragon/
+
 # macOS
 .DS_Store
 .AppleDouble
