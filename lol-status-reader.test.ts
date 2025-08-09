@@ -305,6 +305,8 @@ describe("LoLStatusReader", () => {
         rawDisplayName: "Item_1055_Name",
         slot: 0,
         imageUrl: expect.any(String),
+        totalCost: expect.any(Number),
+        baseCost: expect.any(Number),
       },
       {
         canUse: true,
@@ -317,6 +319,8 @@ describe("LoLStatusReader", () => {
         rawDisplayName: "Item_2003_Name",
         slot: 1,
         imageUrl: expect.any(String),
+        totalCost: expect.any(Number),
+        baseCost: expect.any(Number),
       },
     ]);
   });

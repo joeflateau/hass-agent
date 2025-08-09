@@ -825,7 +825,11 @@ class ItemSlot extends LitElement {
             </div>`
           : ""}
         <div class="item-name">${this.item.displayName}</div>
-        ${this.item.price > 0
+        ${this.item.totalCost > 0
+          ? html`<div class="item-cost">
+              ${this.item.totalCost.toLocaleString()}g
+            </div>`
+          : this.item.price > 0
           ? html`<div class="item-cost">
               ${this.item.price.toLocaleString()}g
             </div>`

@@ -191,6 +191,8 @@ export interface PlayerInfo {
     rawDisplayName?: string;
     slot: number;
     imageUrl?: string;
+    totalCost?: number;
+    baseCost?: number;
   }>;
   runes?: {
     keystone: {
@@ -312,6 +314,8 @@ export interface LoLGameStatus {
     rawDisplayName?: string;
     slot: number;
     imageUrl?: string;
+    totalCost?: number;
+    baseCost?: number;
   }>;
   runes?: {
     keystone: {
@@ -438,11 +442,19 @@ export class LoLStatusReader {
         }
       }
 
-      // Add item image URLs
+      // Add item image URLs and cost data
       if (status.items) {
         for (const item of status.items) {
           const imageUrl = await dataDragon.getItemImageUrl(item.itemID);
           if (imageUrl) item.imageUrl = imageUrl;
+
+          const itemData = await dataDragon.getItem(item.itemID);
+          if (itemData?.gold?.total) {
+            item.totalCost = itemData.gold.total;
+          }
+          if (itemData?.gold?.base) {
+            item.baseCost = itemData.gold.base;
+          }
         }
       }
 
@@ -522,6 +534,14 @@ export class LoLStatusReader {
         for (const item of player.items) {
           const imageUrl = await dataDragon.getItemImageUrl(item.itemID);
           if (imageUrl) item.imageUrl = imageUrl;
+
+          const itemData = await dataDragon.getItem(item.itemID);
+          if (itemData?.gold?.total) {
+            item.totalCost = itemData.gold.total;
+          }
+          if (itemData?.gold?.base) {
+            item.baseCost = itemData.gold.base;
+          }
         }
       }
 
