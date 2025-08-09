@@ -280,7 +280,7 @@ describe("MqttDeviceFramework", () => {
 });
 
 describe("MqttDeviceEmitter", () => {
-  let emitter: MqttDeviceEmitter;
+  let emitter: MqttDeviceEmitter<any>;
   let deviceConfig: any;
   let entities: any[];
 
