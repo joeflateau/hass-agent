@@ -15,8 +15,10 @@
     "start": "./hass-agent",
     "test": "bun test",
     "test:watch": "bun test --watch",
-    "release": "scripts/tag-release.sh ${RELEASE_TYPE:-patch}",
-    "update-data-dragon": "./hass-agent update-data-dragon"
+    "pretest": "npm run ensure-data-dragon",
+    "ensure-data-dragon": "bun run scripts/ensure-data-dragon.ts",
+    "update-data-dragon": "./hass-agent update-data-dragon",
+    "release": "scripts/tag-release.sh ${RELEASE_TYPE:-patch}"
   },
   "keywords": [
     "home-assistant",

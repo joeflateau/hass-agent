@@ -9,6 +9,12 @@ bun.lockb
 # Compiled executable
 hass-agent
 hass-agent.exe
+hass-agent-arm64
+hass-agent-x64
+hass-agent-universal
+
+# Data Dragon static data (downloaded at runtime)
+data/
 
 # output
 out

@@ -213,13 +213,14 @@ log_info "Installing executable to $INSTALL_DIR..."
 cp hass-agent "$INSTALL_DIR/"
 chmod +x "$INSTALL_DIR/hass-agent"
 
-# Update Data Dragon data if possible
-log_info "Updating League of Legends Data Dragon data..."
+# Download fresh Data Dragon data
+log_info "Downloading League of Legends Data Dragon data..."
 cd "$CONFIG_DIR"
 if "$INSTALL_DIR/hass-agent" update-data-dragon; then
-    log_success "Data Dragon data updated successfully"
+    log_success "Data Dragon data downloaded successfully"
 else
-    log_warning "Failed to update Data Dragon data (will retry at runtime)"
+    log_warning "Failed to download Data Dragon data (will retry at runtime)"
+    log_info "Note: LoL status features will have limited functionality without this data"
 fi
 cd "$TEMP_DIR"
 
