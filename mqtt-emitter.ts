@@ -84,15 +84,15 @@ export class MqttDeviceFramework {
     this.setupMqttClient();
   }
 
-  public createDeviceEmitter(
+  public createDeviceEmitter<TState>(
     topicId: string,
     entities: Array<{
       type: "sensor" | "binary_sensor";
       id: string;
       config: Omit<EntityConfig, "device" | "unique_id" | "state_topic">;
     }>
-  ): MqttDeviceEmitter {
-    return new MqttDeviceEmitter(
+  ): MqttDeviceEmitter<TState> {
+    return new MqttDeviceEmitter<TState>(
       this.client,
       this.deviceId,
       this.deviceConfig,
@@ -180,7 +180,7 @@ export class MqttDeviceFramework {
   }
 }
 
-export class MqttDeviceEmitter {
+export class MqttDeviceEmitter<TState> {
   private client: mqtt.MqttClient;
   private deviceId: string;
   private deviceConfig: DeviceConfig;
@@ -218,7 +218,7 @@ export class MqttDeviceEmitter {
   }
 
   public publishState(
-    data: any,
+    data: TState,
     options: mqtt.IClientPublishOptions = { qos: 1, retain: true }
   ): void {
     this.client.publish(this.stateTopic, JSON.stringify(data), options);

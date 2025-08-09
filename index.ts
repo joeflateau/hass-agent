@@ -12,9 +12,16 @@ import { hostname } from "os";
 import * as winston from "winston";
 import { z } from "zod";
 import { AutoUpdater, type AutoUpdaterConfig } from "./auto-updater.ts";
-import { BatteryStatusReader } from "./battery-status-reader.ts";
-import { DisplayStatusReader } from "./display-status-reader.ts";
-import { LoLStatusReader } from "./lol-status-reader.ts";
+import { type BatteryInfo } from "./battery-parser.ts";
+import {
+  BatteryStatusReader,
+  type UptimeInfo,
+} from "./battery-status-reader.ts";
+import {
+  DisplayStatusReader,
+  type DisplayInfo,
+} from "./display-status-reader.ts";
+import { LoLStatusReader, type LoLGameStatus } from "./lol-status-reader.ts";
 import {
   MqttDeviceFramework,
   type MqttConfig,
@@ -124,10 +131,10 @@ class MacOSPowerAgent {
   private batteryReader: BatteryStatusReader;
   private lolStatusReader: LoLStatusReader;
   private mqttFramework: MqttDeviceFramework;
-  private batteryEmitter: MqttDeviceEmitter;
-  private uptimeEmitter: MqttDeviceEmitter;
-  private displayEmitter: MqttDeviceEmitter;
-  private lolEmitter: MqttDeviceEmitter;
+  private batteryEmitter: MqttDeviceEmitter<BatteryInfo>;
+  private uptimeEmitter: MqttDeviceEmitter<UptimeInfo>;
+  private displayEmitter: MqttDeviceEmitter<DisplayInfo>;
+  private lolEmitter: MqttDeviceEmitter<LoLGameStatus>;
   private autoUpdater: AutoUpdater;
   private isShuttingDown = false;
 
@@ -153,7 +160,7 @@ class MacOSPowerAgent {
     this.mqttFramework = new MqttDeviceFramework(mqttConfig, logger);
 
     // Create device emitters
-    this.batteryEmitter = this.mqttFramework.createDeviceEmitter(
+    this.batteryEmitter = this.mqttFramework.createDeviceEmitter<BatteryInfo>(
       "battery_status",
       [
         {
@@ -163,7 +170,7 @@ class MacOSPowerAgent {
             name: "Battery Level",
             device_class: "battery",
             unit_of_measurement: "%",
-            value_template: "{{ value_json.battery_level }}",
+            value_template: "{{ value_json.batteryLevel }}",
           },
         },
         {
@@ -172,7 +179,7 @@ class MacOSPowerAgent {
           config: {
             name: "Battery Charging",
             device_class: "battery_charging",
-            value_template: "{{ value_json.is_charging }}",
+            value_template: "{{ 'ON' if value_json.isCharging else 'OFF' }}",
           },
         },
         {
@@ -181,7 +188,8 @@ class MacOSPowerAgent {
           config: {
             name: "AC Power",
             device_class: "plug",
-            value_template: "{{ value_json.ac_power }}",
+            value_template:
+              "{{ 'ON' if value_json.powerSource == 'AC' else 'OFF' }}",
           },
         },
         {
@@ -190,7 +198,7 @@ class MacOSPowerAgent {
           config: {
             name: "Battery Time Remaining to Empty",
             unit_of_measurement: "min",
-            value_template: "{{ value_json.time_remaining_to_empty }}",
+            value_template: "{{ value_json.timeRemainingToEmpty }}",
             icon: "mdi:battery-clock",
             entity_category: "diagnostic",
             enabled_by_default: true,
@@ -202,7 +210,7 @@ class MacOSPowerAgent {
           config: {
             name: "Battery Time Remaining to Full",
             unit_of_measurement: "min",
-            value_template: "{{ value_json.time_remaining_to_full }}",
+            value_template: "{{ value_json.timeRemainingToFull }}",
             icon: "mdi:battery-charging",
             entity_category: "diagnostic",
             enabled_by_default: true,
@@ -211,19 +219,22 @@ class MacOSPowerAgent {
       ]
     );
 
-    this.uptimeEmitter = this.mqttFramework.createDeviceEmitter("uptime", [
-      {
-        type: "sensor",
-        id: "uptime",
-        config: {
-          name: "System Uptime",
-          unit_of_measurement: "min",
-          value_template: "{{ value_json.uptime }}",
+    this.uptimeEmitter = this.mqttFramework.createDeviceEmitter<UptimeInfo>(
+      "uptime",
+      [
+        {
+          type: "sensor",
+          id: "uptime",
+          config: {
+            name: "System Uptime",
+            unit_of_measurement: "min",
+            value_template: "{{ value_json.uptimeMinutes }}",
+          },
         },
-      },
-    ]);
+      ]
+    );
 
-    this.displayEmitter = this.mqttFramework.createDeviceEmitter(
+    this.displayEmitter = this.mqttFramework.createDeviceEmitter<DisplayInfo>(
       "display_status",
       [
         {
@@ -240,7 +251,7 @@ class MacOSPowerAgent {
           config: {
             name: "External Display Count",
             unit_of_measurement: "displays",
-            value_template: "{{ value_json.external_display_count }}",
+            value_template: "{{ value_json.externalDisplayCount }}",
           },
         },
         {
@@ -249,7 +260,8 @@ class MacOSPowerAgent {
           config: {
             name: "Built-in Display Online",
             device_class: "connectivity",
-            value_template: "{{ value_json.builtin_display_online }}",
+            value_template:
+              "{{ 'ON' if value_json.builtinDisplayOnline else 'OFF' }}",
           },
         },
         {
@@ -258,140 +270,148 @@ class MacOSPowerAgent {
           config: {
             name: "Display Information",
             unit_of_measurement: "displays",
-            value_template: "{{ value_json.total_displays }}",
+            value_template:
+              "{{ value_json.externalDisplayCount + (1 if value_json.builtinDisplayOnline else 0) }}",
             json_attributes_topic: `homeassistant/sensor/${this.config.DEVICE_ID}/display_status/state`,
           },
         },
       ]
     );
 
-    this.lolEmitter = this.mqttFramework.createDeviceEmitter("lol_status", [
-      {
-        type: "binary_sensor",
-        id: "lol_in_game",
-        config: {
-          name: "LoL In Game",
-          device_class: "connectivity",
-          value_template: "{{ 'ON' if value_json.isInGame else 'OFF' }}",
-          icon: "mdi:gamepad-variant",
+    this.lolEmitter = this.mqttFramework.createDeviceEmitter<LoLGameStatus>(
+      "lol_status",
+      [
+        {
+          type: "binary_sensor",
+          id: "lol_in_game",
+          config: {
+            name: "LoL In Game",
+            device_class: "connectivity",
+            value_template: "{{ 'ON' if value_json.isInGame else 'OFF' }}",
+            icon: "mdi:gamepad-variant",
+          },
         },
-      },
-      {
-        type: "sensor",
-        id: "lol_game_mode",
-        config: {
-          name: "LoL Game Mode",
-          value_template: "{{ value_json.gameMode | default('unavailable') }}",
-          icon: "mdi:gamepad-variant",
+        {
+          type: "sensor",
+          id: "lol_game_mode",
+          config: {
+            name: "LoL Game Mode",
+            value_template:
+              "{{ value_json.gameMode | default('unavailable') }}",
+            icon: "mdi:gamepad-variant",
+          },
         },
-      },
-      {
-        type: "sensor",
-        id: "lol_game_time",
-        config: {
-          name: "LoL Game Time",
-          unit_of_measurement: "seconds",
-          value_template: "{{ value_json.gameTime | default('unavailable') }}",
-          icon: "mdi:timer-outline",
+        {
+          type: "sensor",
+          id: "lol_game_time",
+          config: {
+            name: "LoL Game Time",
+            unit_of_measurement: "seconds",
+            value_template:
+              "{{ value_json.gameTime | default('unavailable') }}",
+            icon: "mdi:timer-outline",
+          },
         },
-      },
-      {
-        type: "sensor",
-        id: "lol_champion",
-        config: {
-          name: "LoL Champion",
-          value_template:
-            "{{ value_json.championName | default('unavailable') }}",
-          icon: "mdi:account-warrior",
+        {
+          type: "sensor",
+          id: "lol_champion",
+          config: {
+            name: "LoL Champion",
+            value_template:
+              "{{ value_json.championName | default('unavailable') }}",
+            icon: "mdi:account-warrior",
+          },
         },
-      },
-      {
-        type: "sensor",
-        id: "lol_level",
-        config: {
-          name: "LoL Level",
-          unit_of_measurement: "level",
-          value_template: "{{ value_json.level | default('unavailable') }}",
-          icon: "mdi:trophy",
+        {
+          type: "sensor",
+          id: "lol_level",
+          config: {
+            name: "LoL Level",
+            unit_of_measurement: "level",
+            value_template: "{{ value_json.level | default('unavailable') }}",
+            icon: "mdi:trophy",
+          },
         },
-      },
-      {
-        type: "sensor",
-        id: "lol_gold",
-        config: {
-          name: "LoL Gold",
-          unit_of_measurement: "gold",
-          state_class: "measurement",
-          value_template: "{{ (value_json.currentGold | default(0)) | floor }}",
-          icon: "mdi:currency-usd",
+        {
+          type: "sensor",
+          id: "lol_gold",
+          config: {
+            name: "LoL Gold",
+            unit_of_measurement: "gold",
+            state_class: "measurement",
+            value_template:
+              "{{ (value_json.currentGold | default(0)) | floor }}",
+            icon: "mdi:currency-usd",
+          },
         },
-      },
-      {
-        type: "sensor",
-        id: "lol_kills",
-        config: {
-          name: "LoL Kills",
-          unit_of_measurement: "kills",
-          value_template:
-            "{{ value_json.score.kills | default('unavailable') }}",
-          icon: "mdi:sword",
+        {
+          type: "sensor",
+          id: "lol_kills",
+          config: {
+            name: "LoL Kills",
+            unit_of_measurement: "kills",
+            value_template:
+              "{{ value_json.score.kills | default('unavailable') }}",
+            icon: "mdi:sword",
+          },
         },
-      },
-      {
-        type: "sensor",
-        id: "lol_deaths",
-        config: {
-          name: "LoL Deaths",
-          unit_of_measurement: "deaths",
-          value_template:
-            "{{ value_json.score.deaths | default('unavailable') }}",
-          icon: "mdi:skull",
+        {
+          type: "sensor",
+          id: "lol_deaths",
+          config: {
+            name: "LoL Deaths",
+            unit_of_measurement: "deaths",
+            value_template:
+              "{{ value_json.score.deaths | default('unavailable') }}",
+            icon: "mdi:skull",
+          },
         },
-      },
-      {
-        type: "sensor",
-        id: "lol_assists",
-        config: {
-          name: "LoL Assists",
-          unit_of_measurement: "assists",
-          value_template:
-            "{{ value_json.score.assists | default('unavailable') }}",
-          icon: "mdi:account-multiple",
+        {
+          type: "sensor",
+          id: "lol_assists",
+          config: {
+            name: "LoL Assists",
+            unit_of_measurement: "assists",
+            value_template:
+              "{{ value_json.score.assists | default('unavailable') }}",
+            icon: "mdi:account-multiple",
+          },
         },
-      },
-      {
-        type: "sensor",
-        id: "lol_creep_score",
-        config: {
-          name: "LoL Creep Score",
-          unit_of_measurement: "cs",
-          value_template:
-            "{{ value_json.score.creepScore | default('unavailable') }}",
-          icon: "mdi:sword",
+        {
+          type: "sensor",
+          id: "lol_creep_score",
+          config: {
+            name: "LoL Creep Score",
+            unit_of_measurement: "cs",
+            value_template:
+              "{{ value_json.score.creepScore | default('unavailable') }}",
+            icon: "mdi:sword",
+          },
         },
-      },
-      {
-        type: "sensor",
-        id: "lol_ward_score",
-        config: {
-          name: "LoL Ward Score",
-          unit_of_measurement: "wards",
-          value_template:
-            "{{ value_json.score.wardScore | default('unavailable') }}",
-          icon: "mdi:eye",
+        {
+          type: "sensor",
+          id: "lol_ward_score",
+          config: {
+            name: "LoL Ward Score",
+            unit_of_measurement: "wards",
+            value_template:
+              "{{ value_json.score.wardScore | default('unavailable') }}",
+            icon: "mdi:eye",
+          },
         },
-      },
-      {
-        type: "sensor",
-        id: "lol_game_info",
-        config: {
-          name: "LoL Game Info",
-          value_template: "{{ value_json.gameMode | default('unavailable') }}",
-          json_attributes_topic: `homeassistant/sensor/${this.config.DEVICE_ID}/lol_status/state`,
-          icon: "mdi:information",
+        {
+          type: "sensor",
+          id: "lol_game_info",
+          config: {
+            name: "LoL Game Info",
+            value_template:
+              "{{ value_json.gameMode | default('unavailable') }}",
+            json_attributes_topic: `homeassistant/sensor/${this.config.DEVICE_ID}/lol_status/state`,
+            icon: "mdi:information",
+          },
         },
-      },
-    ]);
+      ]
+    );
 
     // Initialize auto-updater
     const autoUpdaterConfig: AutoUpdaterConfig = {
