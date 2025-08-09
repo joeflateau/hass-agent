@@ -4,6 +4,7 @@ const LitElement = customElements.get("hui-masonry-view")
 const html = LitElement.prototype.html || LitElement.html;
 const css = LitElement.prototype.css || LitElement.css;
 
+// Main card
 class LoLStatusCard extends LitElement {
   static get properties() {
     return {
@@ -148,7 +149,7 @@ class LoLStatusCard extends LitElement {
                         ? html`
                             <div class="score-item">
                               <div class="score-number wards">
-                                ${score.wardScore}
+                                ${Math.floor(score.wardScore)}
                               </div>
                               <div class="score-label">Wards</div>
                             </div>
@@ -173,7 +174,7 @@ class LoLStatusCard extends LitElement {
                       </div>
                       ${isDead
                         ? html`<div class="death-timer">
-                            💀 Respawn: ${respawnTimer}s
+                            💀 Respawn: ${Math.floor(respawnTimer)}s
                           </div>`
                         : ""}
                     </div>
@@ -222,94 +223,31 @@ class LoLStatusCard extends LitElement {
                 ? html`
                     <div class="abilities-section">
                       <div class="abilities-container">
-                        ${abilities.Passive
-                          ? html`
-                              <div class="ability-item">
-                                <div class="ability-key passive">P</div>
-                                <div class="ability-info">
-                                  <div class="ability-name">
-                                    ${abilities.Passive.displayName}
-                                  </div>
-                                </div>
-                              </div>
-                            `
-                          : html`<div class="ability-item empty"></div>`}
-                        ${abilities.Q
-                          ? html`
-                              <div class="ability-item">
-                                <div class="ability-key">Q</div>
-                                <div class="ability-info">
-                                  <div class="ability-name">
-                                    ${abilities.Q.displayName}
-                                  </div>
-                                  ${abilities.Q.abilityLevel !== undefined
-                                    ? html`
-                                        <div class="ability-level">
-                                          Lv ${abilities.Q.abilityLevel}
-                                        </div>
-                                      `
-                                    : ""}
-                                </div>
-                              </div>
-                            `
-                          : html`<div class="ability-item empty"></div>`}
-                        ${abilities.W
-                          ? html`
-                              <div class="ability-item">
-                                <div class="ability-key">W</div>
-                                <div class="ability-info">
-                                  <div class="ability-name">
-                                    ${abilities.W.displayName}
-                                  </div>
-                                  ${abilities.W.abilityLevel !== undefined
-                                    ? html`
-                                        <div class="ability-level">
-                                          Lv ${abilities.W.abilityLevel}
-                                        </div>
-                                      `
-                                    : ""}
-                                </div>
-                              </div>
-                            `
-                          : html`<div class="ability-item empty"></div>`}
-                        ${abilities.E
-                          ? html`
-                              <div class="ability-item">
-                                <div class="ability-key">E</div>
-                                <div class="ability-info">
-                                  <div class="ability-name">
-                                    ${abilities.E.displayName}
-                                  </div>
-                                  ${abilities.E.abilityLevel !== undefined
-                                    ? html`
-                                        <div class="ability-level">
-                                          Lv ${abilities.E.abilityLevel}
-                                        </div>
-                                      `
-                                    : ""}
-                                </div>
-                              </div>
-                            `
-                          : html`<div class="ability-item empty"></div>`}
-                        ${abilities.R
-                          ? html`
-                              <div class="ability-item">
-                                <div class="ability-key ultimate">R</div>
-                                <div class="ability-info">
-                                  <div class="ability-name">
-                                    ${abilities.R.displayName}
-                                  </div>
-                                  ${abilities.R.abilityLevel !== undefined
-                                    ? html`
-                                        <div class="ability-level">
-                                          Lv ${abilities.R.abilityLevel}
-                                        </div>
-                                      `
-                                    : ""}
-                                </div>
-                              </div>
-                            `
-                          : html`<div class="ability-item empty"></div>`}
+                        <lol-ability-item
+                          .ability=${abilities.Passive}
+                          .keyName=${"P"}
+                          .isEmpty=${!abilities.Passive}
+                        ></lol-ability-item>
+                        <lol-ability-item
+                          .ability=${abilities.Q}
+                          .keyName=${"Q"}
+                          .isEmpty=${!abilities.Q}
+                        ></lol-ability-item>
+                        <lol-ability-item
+                          .ability=${abilities.W}
+                          .keyName=${"W"}
+                          .isEmpty=${!abilities.W}
+                        ></lol-ability-item>
+                        <lol-ability-item
+                          .ability=${abilities.E}
+                          .keyName=${"E"}
+                          .isEmpty=${!abilities.E}
+                        ></lol-ability-item>
+                        <lol-ability-item
+                          .ability=${abilities.R}
+                          .keyName=${"R"}
+                          .isEmpty=${!abilities.R}
+                        ></lol-ability-item>
                       </div>
                     </div>
                   `
@@ -350,7 +288,7 @@ class LoLStatusCard extends LitElement {
                         icon="mdi:currency-usd"
                       ></ha-icon>
                       <span class="gold-amount"
-                        >${currentGold.toLocaleString()}g</span
+                        >${Math.floor(currentGold).toLocaleString()}g</span
                       >
                     </div>
                   `
@@ -365,129 +303,45 @@ class LoLStatusCard extends LitElement {
 
                           // Place items in their correct slots
                           items.forEach((item) => {
-                            const slot =
-                              item.slot !== undefined
-                                ? item.slot
-                                : item.itemID % 7;
-                            if (slot >= 0 && slot < 7) {
-                              itemSlots[slot] = item;
-                            }
+                            itemSlots[item.slot] = item;
                           });
 
                           return itemSlots.map((item, index) => {
                             const isTrinket = index === 6;
-                            return item
-                              ? html`
-                                  <div
-                                    class="item-slot ${isTrinket
-                                      ? "trinket"
-                                      : ""}"
-                                    title="${item.rawDescription ||
-                                    item.displayName}"
-                                  >
-                                    ${item.canUse
-                                      ? html`
-                                          <div class="item-key">
-                                            ${isTrinket
-                                              ? "4"
-                                              : index < 3
-                                              ? (index + 1).toString()
-                                              : (index + 2).toString()}
-                                          </div>
-                                        `
-                                      : ""}
-                                    <div class="item-name">
-                                      ${item.displayName}
-                                    </div>
-                                    ${item.count > 1
-                                      ? html`<div class="item-count">
-                                          x${item.count}
-                                        </div>`
-                                      : ""}
-                                  </div>
-                                `
-                              : html`<div
-                                  class="item-slot empty ${isTrinket
-                                    ? "trinket"
-                                    : ""}"
-                                ></div>`;
+                            return html`
+                              <lol-item-slot
+                                .item=${item}
+                                .isTrinket=${isTrinket}
+                                .isEmpty=${!item}
+                              ></lol-item-slot>
+                            `;
                           });
                         })()}
                       </div>
                     </div>
                   `
                 : ""}
-              ${teammates.length > 0
+              ${teammates.length > 0 || enemies.length > 0
                 ? html`
                     <div class="players-section">
-                      <div class="team-section teammates">
-                        <div class="team-header">Team</div>
-                        <div class="players-grid">
-                          ${teammates.map(
-                            (player) => html`
-                              <div class="player-item">
-                                <div class="player-champion">
-                                  ${player.championName}
-                                </div>
-                                <div class="player-name">
-                                  ${player.riotIdGameName ||
-                                  player.summonerName ||
-                                  "Unknown"}
-                                </div>
-                                <div class="player-score">
-                                  ${player.scores.kills}/${player.scores
-                                    .deaths}/${player.scores.assists}
-                                </div>
-                                <div class="player-cs">
-                                  ${player.scores.creepScore} CS
-                                </div>
-                                ${player.isDead
-                                  ? html`<div class="player-status dead">
-                                      💀 ${player.respawnTimer}s
-                                    </div>`
-                                  : ""}
-                              </div>
-                            `
-                          )}
-                        </div>
-                      </div>
-                    </div>
-                  `
-                : ""}
-              ${enemies.length > 0
-                ? html`
-                    <div class="players-section">
-                      <div class="team-section enemies">
-                        <div class="team-header">Enemies</div>
-                        <div class="players-grid">
-                          ${enemies.map(
-                            (player) => html`
-                              <div class="player-item">
-                                <div class="player-champion">
-                                  ${player.championName}
-                                </div>
-                                <div class="player-name">
-                                  ${player.riotIdGameName ||
-                                  player.summonerName ||
-                                  "Unknown"}
-                                </div>
-                                <div class="player-score">
-                                  ${player.scores.kills}/${player.scores
-                                    .deaths}/${player.scores.assists}
-                                </div>
-                                <div class="player-cs">
-                                  ${player.scores.creepScore} CS
-                                </div>
-                                ${player.isDead
-                                  ? html`<div class="player-status dead">
-                                      💀 ${player.respawnTimer}s
-                                    </div>`
-                                  : ""}
-                              </div>
-                            `
-                          )}
-                        </div>
-                      </div>
+                      ${teammates.length > 0
+                        ? html`
+                            <lol-team-section
+                              .players=${teammates}
+                              .teamType=${"teammates"}
+                              .title=${"Team"}
+                            ></lol-team-section>
+                          `
+                        : ""}
+                      ${enemies.length > 0
+                        ? html`
+                            <lol-team-section
+                              .players=${enemies}
+                              .teamType=${"enemies"}
+                              .title=${"Enemies"}
+                            ></lol-team-section>
+                          `
+                        : ""}
                     </div>
                   `
                 : ""}
@@ -781,59 +635,6 @@ class LoLStatusCard extends LitElement {
         gap: 6px;
         justify-content: space-between;
       }
-      .ability-item {
-        flex: 1;
-        display: flex;
-        flex-direction: column;
-        align-items: center;
-        gap: 4px;
-        padding: 6px 3px;
-        background-color: rgba(33, 150, 243, 0.1);
-        border-radius: 4px;
-        border: 1px solid rgba(33, 150, 243, 0.3);
-        min-height: 50px;
-      }
-      .ability-item.empty {
-        background-color: var(--disabled-color);
-        opacity: 0.3;
-        border-color: var(--divider-color);
-      }
-      .ability-key {
-        background-color: #2196f3;
-        color: white;
-        font-weight: bold;
-        font-size: 0.8em;
-        padding: 4px 6px;
-        border-radius: 3px;
-        min-width: 20px;
-        text-align: center;
-      }
-      .ability-key.passive {
-        background-color: #9c27b0;
-      }
-      .ability-key.ultimate {
-        background-color: #ff9800;
-      }
-      .ability-info {
-        flex: 1;
-        display: flex;
-        flex-direction: column;
-        align-items: center;
-        gap: 1px;
-        text-align: center;
-      }
-      .ability-name {
-        font-size: 0.6em;
-        font-weight: 500;
-        color: var(--primary-text-color);
-        line-height: 1.1;
-        text-align: center;
-      }
-      .ability-level {
-        font-size: 0.55em;
-        color: var(--secondary-text-color);
-        font-weight: 500;
-      }
       .items-section {
         margin-bottom: 12px;
         padding: 8px;
@@ -847,6 +648,120 @@ class LoLStatusCard extends LitElement {
         gap: 4px;
         align-items: center;
       }
+      .runes-section {
+        margin-bottom: 12px;
+        padding: 8px;
+        background-color: var(--card-background-color);
+        border-radius: 6px;
+        border: 1px solid var(--divider-color);
+      }
+      .runes-container {
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+      }
+      .keystone-rune {
+        text-align: center;
+        padding: 6px;
+        background-color: rgba(255, 193, 7, 0.1);
+        border: 1px solid rgba(255, 193, 7, 0.3);
+        border-radius: 4px;
+      }
+      .rune-trees {
+        display: flex;
+        gap: 6px;
+      }
+      .rune-tree {
+        flex: 1;
+        text-align: center;
+        padding: 4px;
+        background-color: rgba(156, 39, 176, 0.1);
+        border: 1px solid rgba(156, 39, 176, 0.3);
+        border-radius: 4px;
+      }
+      .rune-type {
+        font-size: 0.6em;
+        color: var(--secondary-text-color);
+        text-transform: uppercase;
+        font-weight: 500;
+        margin-bottom: 1px;
+      }
+      .rune-name {
+        font-size: 0.7em;
+        font-weight: 500;
+        color: var(--primary-text-color);
+      }
+
+      /* Players section styles */
+      .players-section {
+        margin-bottom: 12px;
+      }
+    `;
+  }
+
+  getCardSize() {
+    return 5;
+  }
+
+  static getConfigElement() {
+    return document.createElement("lol-status-card-editor");
+  }
+
+  static getStubConfig() {
+    return {
+      entity: "sensor.your_device_lol_game_info",
+      title: "League of Legends Status",
+      show_header: true,
+    };
+  }
+}
+
+// Item Slot Component
+class ItemSlot extends LitElement {
+  static get properties() {
+    return {
+      item: { type: Object },
+      isTrinket: { type: Boolean },
+      isEmpty: { type: Boolean },
+    };
+  }
+
+  render() {
+    if (this.isEmpty || !this.item) {
+      return html`
+        <div class="item-slot empty ${this.isTrinket ? "trinket" : ""}"></div>
+      `;
+    }
+
+    return html`
+      <div
+        class="item-slot ${this.isTrinket ? "trinket" : ""}"
+        title="${this.item.rawDescription || this.item.displayName}"
+      >
+        ${this.item.canUse
+          ? html`<div class="item-key">
+              ${this.item.slot === 6
+                ? 4
+                : this.item.slot < 3
+                ? this.item.slot + 1
+                : this.item.slot + 2}
+            </div>`
+          : ""}
+        <div class="item-name">${this.item.displayName}</div>
+        ${this.item.price > 0
+          ? html`<div class="item-cost">
+              ${this.item.price.toLocaleString()}g
+            </div>`
+          : ""}
+        ${this.item.count > 1
+          ? html`<div class="item-count">x${this.item.count}</div>`
+          : ""}
+      </div>
+    `;
+  }
+
+  static get styles() {
+    return css`
       .item-slot {
         aspect-ratio: 1;
         border-radius: 4px;
@@ -924,54 +839,152 @@ class LoLStatusCard extends LitElement {
         min-width: 10px;
         text-align: center;
       }
-      .runes-section {
-        margin-bottom: 12px;
-        padding: 8px;
-        background-color: var(--card-background-color);
-        border-radius: 6px;
-        border: 1px solid var(--divider-color);
+      .item-cost {
+        position: absolute;
+        bottom: 1px;
+        left: 1px;
+        background-color: rgba(255, 193, 7, 0.9);
+        color: #000;
+        font-size: 0.5em;
+        font-weight: bold;
+        padding: 1px 3px;
+        border-radius: 2px;
+        min-width: 15px;
+        text-align: center;
+        line-height: 1;
       }
-      .runes-container {
+    `;
+  }
+}
+
+// Player Item Component
+class PlayerItem extends LitElement {
+  static get properties() {
+    return {
+      player: { type: Object },
+    };
+  }
+
+  render() {
+    if (!this.player) {
+      return html``;
+    }
+
+    return html`
+      <div class="player-item">
+        <div class="player-champion">${this.player.championName}</div>
+        <div class="player-name">
+          ${this.player.riotIdGameName || this.player.summonerName || "Unknown"}
+        </div>
+        <div class="player-level">Lv ${this.player.level || "?"}</div>
+        <div class="player-score">
+          ${this.player.scores.kills}/${this.player.scores.deaths}/${this.player
+            .scores.assists}
+        </div>
+        <div class="player-cs">${this.player.scores.creepScore} CS</div>
+        ${this.player.isDead
+          ? html`
+              <div class="player-status dead">
+                💀 ${Math.floor(this.player.respawnTimer)}s
+              </div>
+            `
+          : ""}
+      </div>
+    `;
+  }
+
+  static get styles() {
+    return css`
+      .player-item {
         display: flex;
-        flex-direction: column;
+        align-items: center;
+        justify-content: space-between;
+        padding: 4px 6px;
+        background-color: var(--card-background-color);
+        border-radius: 4px;
+        border: 1px solid var(--divider-color);
         gap: 8px;
       }
-      .keystone-rune {
-        text-align: center;
-        padding: 6px;
-        background-color: rgba(255, 193, 7, 0.1);
-        border: 1px solid rgba(255, 193, 7, 0.3);
-        border-radius: 4px;
-      }
-      .rune-trees {
-        display: flex;
-        gap: 6px;
-      }
-      .rune-tree {
-        flex: 1;
-        text-align: center;
-        padding: 4px;
-        background-color: rgba(156, 39, 176, 0.1);
-        border: 1px solid rgba(156, 39, 176, 0.3);
-        border-radius: 4px;
-      }
-      .rune-type {
-        font-size: 0.6em;
-        color: var(--secondary-text-color);
-        text-transform: uppercase;
-        font-weight: 500;
-        margin-bottom: 1px;
-      }
-      .rune-name {
+      .player-champion {
         font-size: 0.7em;
+        font-weight: 600;
+        color: var(--primary-text-color);
+        min-width: 60px;
+        flex-shrink: 0;
+      }
+      .player-name {
+        font-size: 0.65em;
+        color: var(--secondary-text-color);
+        flex: 1;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+      .player-level {
+        font-size: 0.6em;
+        color: var(--primary-color);
+        font-weight: 600;
+        min-width: 30px;
+        text-align: center;
+        flex-shrink: 0;
+      }
+      .player-score {
+        font-size: 0.65em;
         font-weight: 500;
         color: var(--primary-text-color);
+        min-width: 40px;
+        text-align: center;
+        flex-shrink: 0;
       }
+      .player-cs {
+        font-size: 0.6em;
+        color: var(--secondary-text-color);
+        min-width: 35px;
+        text-align: center;
+        flex-shrink: 0;
+      }
+      .player-status.dead {
+        font-size: 0.6em;
+        color: #ff5722;
+        font-weight: 500;
+        min-width: 35px;
+        text-align: center;
+        flex-shrink: 0;
+      }
+    `;
+  }
+}
 
-      /* Players section styles */
-      .players-section {
-        margin-bottom: 12px;
-      }
+// Team Section Component
+class TeamSection extends LitElement {
+  static get properties() {
+    return {
+      players: { type: Array },
+      teamType: { type: String }, // 'teammates' or 'enemies'
+      title: { type: String },
+    };
+  }
+
+  render() {
+    if (!this.players || this.players.length === 0) {
+      return html``;
+    }
+
+    return html`
+      <div class="team-section ${this.teamType}">
+        <div class="team-header">${this.title}</div>
+        <div class="players-grid">
+          ${this.players.map(
+            (player) =>
+              html`<lol-player-item .player=${player}></lol-player-item>`
+          )}
+        </div>
+      </div>
+    `;
+  }
+
+  static get styles() {
+    return css`
       .team-section {
         margin-bottom: 8px;
         padding: 8px;
@@ -1001,71 +1014,100 @@ class LoLStatusCard extends LitElement {
         flex-direction: column;
         gap: 4px;
       }
-      .player-item {
-        display: flex;
-        align-items: center;
-        justify-content: space-between;
-        padding: 4px 6px;
-        background-color: var(--card-background-color);
-        border-radius: 4px;
-        border: 1px solid var(--divider-color);
-        gap: 8px;
-      }
-      .player-champion {
-        font-size: 0.7em;
-        font-weight: 600;
-        color: var(--primary-text-color);
-        min-width: 60px;
-        flex-shrink: 0;
-      }
-      .player-name {
-        font-size: 0.65em;
-        color: var(--secondary-text-color);
-        flex: 1;
-        overflow: hidden;
-        text-overflow: ellipsis;
-        white-space: nowrap;
-      }
-      .player-score {
-        font-size: 0.65em;
-        font-weight: 500;
-        color: var(--primary-text-color);
-        min-width: 40px;
-        text-align: center;
-        flex-shrink: 0;
-      }
-      .player-cs {
-        font-size: 0.6em;
-        color: var(--secondary-text-color);
-        min-width: 35px;
-        text-align: center;
-        flex-shrink: 0;
-      }
-      .player-status.dead {
-        font-size: 0.6em;
-        color: #ff5722;
-        font-weight: 500;
-        min-width: 35px;
-        text-align: center;
-        flex-shrink: 0;
-      }
+    `;
+  }
+}
+
+// Ability Item Component
+class AbilityItem extends LitElement {
+  static get properties() {
+    return {
+      ability: { type: Object },
+      keyName: { type: String },
+      isEmpty: { type: Boolean },
+    };
+  }
+
+  render() {
+    if (this.isEmpty || !this.ability) {
+      return html`<div class="ability-item empty"></div>`;
+    }
+
+    const isPassive = this.keyName === "P";
+    const isUltimate = this.keyName === "R";
+    const keyClass = isPassive ? "passive" : isUltimate ? "ultimate" : "";
+
+    return html`
+      <div class="ability-item">
+        <div class="ability-key ${keyClass}">${this.keyName}</div>
+        <div class="ability-info">
+          <div class="ability-name">${this.ability.displayName}</div>
+          ${this.ability.abilityLevel !== undefined
+            ? html`
+                <div class="ability-level">Lv ${this.ability.abilityLevel}</div>
+              `
+            : ""}
+        </div>
+      </div>
     `;
   }
 
-  getCardSize() {
-    return 5;
-  }
-
-  static getConfigElement() {
-    return document.createElement("lol-status-card-editor");
-  }
-
-  static getStubConfig() {
-    return {
-      entity: "sensor.your_device_lol_game_info",
-      title: "League of Legends Status",
-      show_header: true,
-    };
+  static get styles() {
+    return css`
+      .ability-item {
+        flex: 1;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 4px;
+        padding: 6px 3px;
+        background-color: rgba(33, 150, 243, 0.1);
+        border-radius: 4px;
+        border: 1px solid rgba(33, 150, 243, 0.3);
+        min-height: 50px;
+      }
+      .ability-item.empty {
+        background-color: var(--disabled-color);
+        opacity: 0.3;
+        border-color: var(--divider-color);
+      }
+      .ability-key {
+        background-color: #2196f3;
+        color: white;
+        font-weight: bold;
+        font-size: 0.8em;
+        padding: 4px 6px;
+        border-radius: 3px;
+        min-width: 20px;
+        text-align: center;
+      }
+      .ability-key.passive {
+        background-color: #9c27b0;
+      }
+      .ability-key.ultimate {
+        background-color: #ff9800;
+      }
+      .ability-info {
+        flex: 1;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 1px;
+        text-align: center;
+      }
+      .ability-name {
+        font-size: 0.6em;
+        font-weight: 500;
+        color: var(--primary-text-color);
+        line-height: 1.1;
+        text-align: center;
+      }
+      .ability-level {
+        font-size: 0.55em;
+        color: var(--secondary-text-color);
+        font-weight: 500;
+      }
+    `;
   }
 }
 
@@ -1189,6 +1231,10 @@ class LoLStatusCardEditor extends LitElement {
   }
 }
 
+customElements.define("lol-item-slot", ItemSlot);
+customElements.define("lol-player-item", PlayerItem);
+customElements.define("lol-team-section", TeamSection);
+customElements.define("lol-ability-item", AbilityItem);
 customElements.define("lol-status-card", LoLStatusCard);
 customElements.define("lol-status-card-editor", LoLStatusCardEditor);
 
