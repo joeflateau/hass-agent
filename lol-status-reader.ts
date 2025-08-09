@@ -400,7 +400,7 @@ export class LoLStatusReader {
   /**
    * Enrich game status with Data Dragon image URLs
    */
-  private async enrichWithImageUrls(
+  private async enrichWithDragonData(
     status: LoLGameStatus
   ): Promise<LoLGameStatus> {
     try {
@@ -855,7 +855,7 @@ export class LoLStatusReader {
       }
 
       // Enrich with Data Dragon image URLs
-      status = await this.enrichWithImageUrls(status);
+      status = await this.enrichWithDragonData(status);
 
       return status;
     } catch (error) {
