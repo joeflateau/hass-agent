@@ -338,7 +338,7 @@ describe("MacOSPowerAgent", () => {
   describe("MQTT device framework integration", () => {
     it("should create device emitters for all device types", () => {
       // Verify that createDeviceEmitter was called for each device type
-      expect(mockMqttFramework.createDeviceEmitter).toHaveBeenCalledTimes(4);
+      expect(mockMqttFramework.createDeviceEmitter).toHaveBeenCalledTimes(5);
 
       // Verify battery emitter creation
       expect(mockMqttFramework.createDeviceEmitter).toHaveBeenCalledWith(
@@ -403,6 +403,27 @@ describe("MacOSPowerAgent", () => {
       // Verify LoL emitter creation
       expect(mockMqttFramework.createDeviceEmitter).toHaveBeenCalledWith(
         "lol_status",
+        expect.arrayContaining([
+          expect.objectContaining({
+            type: "binary_sensor",
+            id: "lol_in_game",
+            config: expect.objectContaining({
+              name: "LoL In Game",
+              device_class: "connectivity",
+            }),
+          }),
+          expect.objectContaining({
+            type: "sensor",
+            id: "lol_game_mode",
+            config: expect.objectContaining({
+              name: "LoL Game Mode",
+            }),
+          }),
+        ])
+      );
+
+      expect(mockMqttFramework.createDeviceEmitter).toHaveBeenCalledWith(
+        "lol_last_in_game_status",
         expect.arrayContaining([
           expect.objectContaining({
             type: "binary_sensor",
