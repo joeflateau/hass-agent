@@ -286,11 +286,134 @@ class MacOSPowerAgent {
       ]
     );
 
-    const [lolStatusEmitter, lolLastInGameStatusEmitter] = [
-      "lol_status",
-      "lol_last_in_game_status",
-    ].map((k) =>
-      this.mqttFramework.createDeviceEmitter<LoLGameStatus>(k, [
+    const lolLastInGameStatusEmitter =
+      this.mqttFramework.createDeviceEmitter<LoLGameStatus>(
+        "lol_last_in_game_status",
+        [
+          {
+            type: "sensor",
+            id: "lol_game_mode",
+            config: {
+              name: "LoL Game Mode",
+              value_template:
+                "{{ value_json.gameMode | default('unavailable') }}",
+              icon: "mdi:gamepad-variant",
+            },
+          },
+          {
+            type: "sensor",
+            id: "lol_game_time",
+            config: {
+              name: "LoL Game Time",
+              unit_of_measurement: "seconds",
+              value_template:
+                "{{ value_json.gameTime | default('unavailable') }}",
+              icon: "mdi:timer-outline",
+            },
+          },
+          {
+            type: "sensor",
+            id: "lol_champion",
+            config: {
+              name: "LoL Champion",
+              value_template:
+                "{{ value_json.championName | default('unavailable') }}",
+              icon: "mdi:account-warrior",
+            },
+          },
+          {
+            type: "sensor",
+            id: "lol_level",
+            config: {
+              name: "LoL Level",
+              unit_of_measurement: "level",
+              value_template: "{{ value_json.level | default('unavailable') }}",
+              icon: "mdi:trophy",
+            },
+          },
+          {
+            type: "sensor",
+            id: "lol_gold",
+            config: {
+              name: "LoL Gold",
+              unit_of_measurement: "gold",
+              state_class: "measurement",
+              value_template:
+                "{{ (value_json.currentGold | default(0)) | floor }}",
+              icon: "mdi:currency-usd",
+            },
+          },
+          {
+            type: "sensor",
+            id: "lol_kills",
+            config: {
+              name: "LoL Kills",
+              unit_of_measurement: "kills",
+              value_template:
+                "{{ value_json.score.kills | default('unavailable') }}",
+              icon: "mdi:sword",
+            },
+          },
+          {
+            type: "sensor",
+            id: "lol_deaths",
+            config: {
+              name: "LoL Deaths",
+              unit_of_measurement: "deaths",
+              value_template:
+                "{{ value_json.score.deaths | default('unavailable') }}",
+              icon: "mdi:skull",
+            },
+          },
+          {
+            type: "sensor",
+            id: "lol_assists",
+            config: {
+              name: "LoL Assists",
+              unit_of_measurement: "assists",
+              value_template:
+                "{{ value_json.score.assists | default('unavailable') }}",
+              icon: "mdi:account-multiple",
+            },
+          },
+          {
+            type: "sensor",
+            id: "lol_creep_score",
+            config: {
+              name: "LoL Creep Score",
+              unit_of_measurement: "cs",
+              value_template:
+                "{{ value_json.score.creepScore | default('unavailable') }}",
+              icon: "mdi:sword",
+            },
+          },
+          {
+            type: "sensor",
+            id: "lol_ward_score",
+            config: {
+              name: "LoL Ward Score",
+              unit_of_measurement: "wards",
+              value_template:
+                "{{ value_json.score.wardScore | default('unavailable') }}",
+              icon: "mdi:eye",
+            },
+          },
+          {
+            type: "sensor",
+            id: "lol_game_info",
+            config: {
+              name: "LoL Game Info",
+              value_template:
+                "{{ value_json.gameMode | default('unavailable') }}",
+              json_attributes_topic: `homeassistant/sensor/${this.config.DEVICE_ID}/lol_last_in_game_status/state`,
+              icon: "mdi:information",
+            },
+          },
+        ]
+      );
+
+    const lolStatusEmitter =
+      this.mqttFramework.createDeviceEmitter<LoLGameStatus>("lol_now_status", [
         {
           type: "binary_sensor",
           id: "lol_in_game",
@@ -301,127 +424,7 @@ class MacOSPowerAgent {
             icon: "mdi:gamepad-variant",
           },
         },
-        {
-          type: "sensor",
-          id: "lol_game_mode",
-          config: {
-            name: "LoL Game Mode",
-            value_template:
-              "{{ value_json.gameMode | default('unavailable') }}",
-            icon: "mdi:gamepad-variant",
-          },
-        },
-        {
-          type: "sensor",
-          id: "lol_game_time",
-          config: {
-            name: "LoL Game Time",
-            unit_of_measurement: "seconds",
-            value_template:
-              "{{ value_json.gameTime | default('unavailable') }}",
-            icon: "mdi:timer-outline",
-          },
-        },
-        {
-          type: "sensor",
-          id: "lol_champion",
-          config: {
-            name: "LoL Champion",
-            value_template:
-              "{{ value_json.championName | default('unavailable') }}",
-            icon: "mdi:account-warrior",
-          },
-        },
-        {
-          type: "sensor",
-          id: "lol_level",
-          config: {
-            name: "LoL Level",
-            unit_of_measurement: "level",
-            value_template: "{{ value_json.level | default('unavailable') }}",
-            icon: "mdi:trophy",
-          },
-        },
-        {
-          type: "sensor",
-          id: "lol_gold",
-          config: {
-            name: "LoL Gold",
-            unit_of_measurement: "gold",
-            state_class: "measurement",
-            value_template:
-              "{{ (value_json.currentGold | default(0)) | floor }}",
-            icon: "mdi:currency-usd",
-          },
-        },
-        {
-          type: "sensor",
-          id: "lol_kills",
-          config: {
-            name: "LoL Kills",
-            unit_of_measurement: "kills",
-            value_template:
-              "{{ value_json.score.kills | default('unavailable') }}",
-            icon: "mdi:sword",
-          },
-        },
-        {
-          type: "sensor",
-          id: "lol_deaths",
-          config: {
-            name: "LoL Deaths",
-            unit_of_measurement: "deaths",
-            value_template:
-              "{{ value_json.score.deaths | default('unavailable') }}",
-            icon: "mdi:skull",
-          },
-        },
-        {
-          type: "sensor",
-          id: "lol_assists",
-          config: {
-            name: "LoL Assists",
-            unit_of_measurement: "assists",
-            value_template:
-              "{{ value_json.score.assists | default('unavailable') }}",
-            icon: "mdi:account-multiple",
-          },
-        },
-        {
-          type: "sensor",
-          id: "lol_creep_score",
-          config: {
-            name: "LoL Creep Score",
-            unit_of_measurement: "cs",
-            value_template:
-              "{{ value_json.score.creepScore | default('unavailable') }}",
-            icon: "mdi:sword",
-          },
-        },
-        {
-          type: "sensor",
-          id: "lol_ward_score",
-          config: {
-            name: "LoL Ward Score",
-            unit_of_measurement: "wards",
-            value_template:
-              "{{ value_json.score.wardScore | default('unavailable') }}",
-            icon: "mdi:eye",
-          },
-        },
-        {
-          type: "sensor",
-          id: "lol_game_info",
-          config: {
-            name: "LoL Game Info",
-            value_template:
-              "{{ value_json.gameMode | default('unavailable') }}",
-            json_attributes_topic: `homeassistant/sensor/${this.config.DEVICE_ID}/${k}/state`,
-            icon: "mdi:information",
-          },
-        },
-      ])
-    );
+      ]);
 
     assert(lolStatusEmitter);
     assert(lolLastInGameStatusEmitter);

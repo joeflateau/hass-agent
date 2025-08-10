@@ -400,18 +400,9 @@ describe("MacOSPowerAgent", () => {
         ])
       );
 
-      // Verify LoL emitter creation
       expect(mockMqttFramework.createDeviceEmitter).toHaveBeenCalledWith(
-        "lol_status",
+        "lol_last_in_game_status",
         expect.arrayContaining([
-          expect.objectContaining({
-            type: "binary_sensor",
-            id: "lol_in_game",
-            config: expect.objectContaining({
-              name: "LoL In Game",
-              device_class: "connectivity",
-            }),
-          }),
           expect.objectContaining({
             type: "sensor",
             id: "lol_game_mode",
@@ -422,8 +413,9 @@ describe("MacOSPowerAgent", () => {
         ])
       );
 
+      // Verify LoL emitter creation
       expect(mockMqttFramework.createDeviceEmitter).toHaveBeenCalledWith(
-        "lol_last_in_game_status",
+        "lol_now_status",
         expect.arrayContaining([
           expect.objectContaining({
             type: "binary_sensor",
@@ -431,13 +423,6 @@ describe("MacOSPowerAgent", () => {
             config: expect.objectContaining({
               name: "LoL In Game",
               device_class: "connectivity",
-            }),
-          }),
-          expect.objectContaining({
-            type: "sensor",
-            id: "lol_game_mode",
-            config: expect.objectContaining({
-              name: "LoL Game Mode",
             }),
           }),
         ])
