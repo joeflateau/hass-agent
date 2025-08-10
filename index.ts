@@ -12,6 +12,7 @@
  * - update-data-dragon: Update League of Legends static data from Riot's Data Dragon API
  */
 
+import assert from "assert";
 import { hostname } from "os";
 import { join } from "path";
 import * as winston from "winston";
@@ -141,6 +142,7 @@ class MacOSPowerAgent {
   private uptimeEmitter: MqttDeviceEmitter<UptimeInfo>;
   private displayEmitter: MqttDeviceEmitter<DisplayInfo>;
   private lolEmitter: MqttDeviceEmitter<LoLGameStatus>;
+  private lolLastInGameStatusEmitter: MqttDeviceEmitter<LoLGameStatus>;
   private autoUpdater: AutoUpdater;
   private isShuttingDown = false;
 
@@ -284,9 +286,11 @@ class MacOSPowerAgent {
       ]
     );
 
-    this.lolEmitter = this.mqttFramework.createDeviceEmitter<LoLGameStatus>(
+    const [lolStatusEmitter, lolLastInGameStatusEmitter] = [
       "lol_status",
-      [
+      "lol_last_in_game_status",
+    ].map((k) =>
+      this.mqttFramework.createDeviceEmitter<LoLGameStatus>(k, [
         {
           type: "binary_sensor",
           id: "lol_in_game",
@@ -412,12 +416,18 @@ class MacOSPowerAgent {
             name: "LoL Game Info",
             value_template:
               "{{ value_json.gameMode | default('unavailable') }}",
-            json_attributes_topic: `homeassistant/sensor/${this.config.DEVICE_ID}/lol_status/state`,
+            json_attributes_topic: `homeassistant/sensor/${this.config.DEVICE_ID}/${k}/state`,
             icon: "mdi:information",
           },
         },
-      ]
+      ])
     );
+
+    assert(lolStatusEmitter);
+    assert(lolLastInGameStatusEmitter);
+
+    this.lolEmitter = lolStatusEmitter;
+    this.lolLastInGameStatusEmitter = lolLastInGameStatusEmitter;
 
     // Initialize auto-updater
     const autoUpdaterConfig: AutoUpdaterConfig = {
@@ -437,6 +447,9 @@ class MacOSPowerAgent {
     // Set up LoL status update callback
     this.lolStatusReader.setStatusUpdateCallback((lolStatus) => {
       this.lolEmitter.publishState(lolStatus);
+      if (lolStatus.isInGame) {
+        this.lolLastInGameStatusEmitter.publishState(lolStatus);
+      }
     });
   }
 
