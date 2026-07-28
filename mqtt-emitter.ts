@@ -41,8 +41,35 @@ export interface EntityConfig {
   device: DeviceConfig;
 }
 
+export interface MqttCommandDefinition {
+  id: string;
+  name: string;
+  icon?: string;
+  execute: () => Promise<void>;
+}
+
+interface MqttButtonConfig {
+  name: string;
+  unique_id: string;
+  command_topic: string;
+  payload_press: string;
+  availability_topic: string;
+  payload_available: string;
+  payload_not_available: string;
+  icon?: string;
+  device: DeviceConfig;
+}
+
+interface CommandResult {
+  command: string;
+  status: "success" | "error";
+  timestamp: string;
+  error?: string;
+}
+
 // Home Assistant MQTT Discovery topics
 const DISCOVERY_PREFIX = "homeassistant";
+const COMMAND_PREFIX = "hass-agent";
 
 export class MqttDeviceFramework {
   private logger: winston.Logger;
@@ -50,11 +77,16 @@ export class MqttDeviceFramework {
   private client: mqtt.MqttClient;
   private deviceId: string;
   private deviceConfig: DeviceConfig;
+  private commandTopic: string;
+  private commandResultTopic: string;
+  private commands = new Map<string, MqttCommandDefinition>();
 
   constructor(config: MqttConfig, logger: winston.Logger) {
     this.config = config;
     this.logger = logger;
     this.deviceId = this.config.deviceId;
+    this.commandTopic = `${COMMAND_PREFIX}/${this.deviceId}/command`;
+    this.commandResultTopic = `${COMMAND_PREFIX}/${this.deviceId}/command/result`;
 
     this.deviceConfig = {
       identifiers: [this.deviceId],
@@ -102,6 +134,23 @@ export class MqttDeviceFramework {
     );
   }
 
+  public registerCommands(commands: MqttCommandDefinition[]): void {
+    for (const command of commands) {
+      if (!/^[a-z0-9_]+$/.test(command.id)) {
+        throw new Error(`Invalid MQTT command id: ${command.id}`);
+      }
+      if (this.commands.has(command.id)) {
+        throw new Error(`Duplicate MQTT command id: ${command.id}`);
+      }
+      this.commands.set(command.id, command);
+    }
+
+    this.publishCommandDiscoveryConfigs();
+    if (this.client.connected) {
+      this.subscribeToCommandTopic();
+    }
+  }
+
   public async connect(): Promise<void> {
     return new Promise((resolve) => {
       if (this.client.connected) {
@@ -111,6 +160,7 @@ export class MqttDeviceFramework {
           "online",
           { qos: 1, retain: true }
         );
+        this.subscribeToCommandTopic();
         resolve();
       } else {
         this.client.once("connect", () => {
@@ -164,6 +214,8 @@ export class MqttDeviceFramework {
         "online",
         { qos: 1, retain: true }
       );
+      this.publishCommandDiscoveryConfigs();
+      this.subscribeToCommandTopic();
     });
 
     this.client.on("error", (error) => {
@@ -176,6 +228,122 @@ export class MqttDeviceFramework {
 
     this.client.on("reconnect", () => {
       this.logger.info("Reconnecting to MQTT broker...");
+    });
+
+    this.client.on("message", (topic, payload) => {
+      void this.handleCommandMessage(topic, payload);
+    });
+  }
+
+  private publishCommandDiscoveryConfigs(): void {
+    if (this.commands.size === 0) {
+      return;
+    }
+
+    for (const command of this.commands.values()) {
+      const config: MqttButtonConfig = {
+        name: command.name,
+        unique_id: `${this.deviceId}_${command.id}`,
+        command_topic: this.commandTopic,
+        payload_press: command.id,
+        availability_topic: `${DISCOVERY_PREFIX}/status/${this.deviceId}`,
+        payload_available: "online",
+        payload_not_available: "offline",
+        icon: command.icon,
+        device: this.deviceConfig,
+      };
+
+      this.client.publish(
+        `${DISCOVERY_PREFIX}/button/${this.deviceId}/${command.id}/config`,
+        JSON.stringify(config),
+        { qos: 1, retain: true }
+      );
+    }
+
+    const resultConfig: EntityConfig = {
+      name: "Last Command",
+      unique_id: `${this.deviceId}_last_command`,
+      state_topic: this.commandResultTopic,
+      value_template: "{{ value_json.command }}",
+      json_attributes_topic: this.commandResultTopic,
+      icon: "mdi:console",
+      entity_category: "diagnostic",
+      enabled_by_default: true,
+      device: this.deviceConfig,
+    };
+
+    this.client.publish(
+      `${DISCOVERY_PREFIX}/sensor/${this.deviceId}/last_command/config`,
+      JSON.stringify({
+        ...resultConfig,
+        availability_topic: `${DISCOVERY_PREFIX}/status/${this.deviceId}`,
+        payload_available: "online",
+        payload_not_available: "offline",
+      }),
+      { qos: 1, retain: true }
+    );
+  }
+
+  private subscribeToCommandTopic(): void {
+    if (!this.client.connected || this.commands.size === 0) {
+      return;
+    }
+
+    this.client.subscribe(this.commandTopic, { qos: 1 }, (error) => {
+      if (error) {
+        this.logger.error(
+          `Failed to subscribe to MQTT command topic ${this.commandTopic}: ${error}`
+        );
+        return;
+      }
+
+      this.logger.info(
+        `Listening for ${this.commands.size} allowlisted command(s) on ${this.commandTopic}`
+      );
+    });
+  }
+
+  private async handleCommandMessage(
+    topic: string,
+    payload: Buffer
+  ): Promise<void> {
+    if (topic !== this.commandTopic) {
+      return;
+    }
+
+    const commandId = payload.toString("utf8").trim();
+    const command = this.commands.get(commandId);
+    if (!command) {
+      this.logger.warn(`Ignored unknown MQTT command: ${commandId}`);
+      return;
+    }
+
+    this.logger.info(`Executing MQTT command: ${commandId}`);
+
+    try {
+      await command.execute();
+      this.publishCommandResult({
+        command: commandId,
+        status: "success",
+        timestamp: new Date().toISOString(),
+      });
+      this.logger.info(`MQTT command completed: ${commandId}`);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      this.publishCommandResult({
+        command: commandId,
+        status: "error",
+        timestamp: new Date().toISOString(),
+        error: message,
+      });
+      this.logger.error(`MQTT command failed (${commandId}): ${message}`);
+    }
+  }
+
+  private publishCommandResult(result: CommandResult): void {
+    this.client.publish(this.commandResultTopic, JSON.stringify(result), {
+      qos: 1,
+      retain: true,
     });
   }
 }

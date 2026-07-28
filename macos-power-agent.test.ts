@@ -43,6 +43,7 @@ const mockMqttFramework = {
   connect: mock(),
   disconnect: mock(),
   createDeviceEmitter: mock(() => mockDeviceEmitter),
+  registerCommands: mock(),
 };
 
 const mockDeviceEmitter = {
@@ -126,6 +127,7 @@ describe("MacOSPowerAgent", () => {
     mockMqttFramework.connect.mockClear();
     mockMqttFramework.disconnect.mockClear();
     mockMqttFramework.createDeviceEmitter.mockClear();
+    mockMqttFramework.registerCommands.mockClear();
     mockDeviceEmitter.publishState.mockClear();
   });
 
@@ -144,6 +146,14 @@ describe("MacOSPowerAgent", () => {
           version: "1.0.0",
         }),
         mockLogger
+      );
+      expect(mockMqttFramework.registerCommands).toHaveBeenCalledWith(
+        expect.arrayContaining([
+          expect.objectContaining({
+            id: "lock_screen",
+            name: "Lock Screen",
+          }),
+        ])
       );
     });
 

@@ -9,6 +9,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Home Assistant MQTT buttons for Lock Screen, Sleep Display, and Start Screen
+  Saver, backed by a device-scoped allowlisted command handler.
+- Last Command diagnostic sensor with success/error details.
+
 ### Changed
 
 ### Deprecated
