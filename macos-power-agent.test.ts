@@ -44,6 +44,7 @@ const mockMqttFramework = {
   disconnect: mock(),
   createDeviceEmitter: mock(() => mockDeviceEmitter),
   registerCommands: mock(),
+  retireCommands: mock(),
 };
 
 const mockDeviceEmitter = {
@@ -128,6 +129,7 @@ describe("MacOSPowerAgent", () => {
     mockMqttFramework.disconnect.mockClear();
     mockMqttFramework.createDeviceEmitter.mockClear();
     mockMqttFramework.registerCommands.mockClear();
+    mockMqttFramework.retireCommands.mockClear();
     mockDeviceEmitter.publishState.mockClear();
   });
 
@@ -147,14 +149,16 @@ describe("MacOSPowerAgent", () => {
         }),
         mockLogger
       );
-      expect(mockMqttFramework.registerCommands).toHaveBeenCalledWith(
-        expect.arrayContaining([
-          expect.objectContaining({
-            id: "lock_screen",
-            name: "Lock Screen",
-          }),
-        ])
-      );
+      expect(mockMqttFramework.registerCommands).toHaveBeenCalledWith([
+        expect.objectContaining({
+          id: "sleep_display",
+          name: "Sleep Display",
+        }),
+      ]);
+      expect(mockMqttFramework.retireCommands).toHaveBeenCalledWith([
+        "lock_screen",
+        "start_screensaver",
+      ]);
     });
 
     it("should set battery update callback", () => {

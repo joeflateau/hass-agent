@@ -80,6 +80,7 @@ export class MqttDeviceFramework {
   private commandTopic: string;
   private commandResultTopic: string;
   private commands = new Map<string, MqttCommandDefinition>();
+  private retiredCommandIds = new Set<string>();
 
   constructor(config: MqttConfig, logger: winston.Logger) {
     this.config = config;
@@ -143,12 +144,25 @@ export class MqttDeviceFramework {
         throw new Error(`Duplicate MQTT command id: ${command.id}`);
       }
       this.commands.set(command.id, command);
+      this.retiredCommandIds.delete(command.id);
     }
 
     this.publishCommandDiscoveryConfigs();
     if (this.client.connected) {
       this.subscribeToCommandTopic();
     }
+  }
+
+  public retireCommands(commandIds: readonly string[]): void {
+    for (const commandId of commandIds) {
+      if (!/^[a-z0-9_]+$/.test(commandId)) {
+        throw new Error(`Invalid MQTT command id: ${commandId}`);
+      }
+      this.commands.delete(commandId);
+      this.retiredCommandIds.add(commandId);
+    }
+
+    this.publishRetiredCommandDiscoveryConfigs();
   }
 
   public async connect(): Promise<void> {
@@ -236,6 +250,8 @@ export class MqttDeviceFramework {
   }
 
   private publishCommandDiscoveryConfigs(): void {
+    this.publishRetiredCommandDiscoveryConfigs();
+
     if (this.commands.size === 0) {
       return;
     }
@@ -282,6 +298,16 @@ export class MqttDeviceFramework {
       }),
       { qos: 1, retain: true }
     );
+  }
+
+  private publishRetiredCommandDiscoveryConfigs(): void {
+    for (const commandId of this.retiredCommandIds) {
+      this.client.publish(
+        `${DISCOVERY_PREFIX}/button/${this.deviceId}/${commandId}/config`,
+        "",
+        { qos: 1, retain: true }
+      );
+    }
   }
 
   private subscribeToCommandTopic(): void {
