@@ -278,12 +278,17 @@ The agent automatically registers the following entities in Home Assistant:
 
 ### Commands
 
-Each Mac automatically registers a **Sleep Display** MQTT button on its Home
-Assistant device. It immediately sleeps the displays with `pmset`.
+Each Mac automatically registers these MQTT buttons on its Home Assistant
+device:
+
+- **Lock Screen** — switches directly to the macOS login window with
+  `CGSession`; it does not require AppleScript or Accessibility permission
+- **Sleep Display** — immediately sleeps the displays with `pmset`
 
 Commands are sent to the device-scoped topic
 `hass-agent/{device_id}/command`. The agent accepts only the built-in command
-ID (`sleep_display`); MQTT payloads cannot supply shell commands or arguments.
+IDs (`lock_screen` and `sleep_display`); MQTT payloads cannot supply shell
+commands or arguments.
 
 The **Last Command** diagnostic sensor records the command ID, success/error
 status, timestamp, and any error message.

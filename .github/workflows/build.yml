@@ -28,6 +28,10 @@ jobs:
       - name: Type check
         run: bun run tsc --noEmit
 
+      - name: Verify macOS command dependencies
+        run: |
+          test -x "/System/Library/CoreServices/Menu Extras/User.menu/Contents/Resources/CGSession"
+
       - name: Build executable
         run: bun run build
 
