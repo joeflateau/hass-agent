@@ -14,18 +14,17 @@ describe("createMacOSCommands", () => {
     ]);
   });
 
-  it("locks the session with CGSession without AppleScript", async () => {
+  it("locks the session without AppleScript", async () => {
     const runner = mock(async () => {});
-    const command = createMacOSCommands(runner).find(
+    const screenLocker = mock(async () => {});
+    const command = createMacOSCommands(runner, screenLocker).find(
       ({ id }) => id === "lock_screen"
     );
 
     await command?.execute();
 
-    expect(runner).toHaveBeenCalledWith(
-      "/System/Library/CoreServices/Menu Extras/User.menu/Contents/Resources/CGSession",
-      ["-suspend"]
-    );
+    expect(screenLocker).toHaveBeenCalledTimes(1);
+    expect(runner).not.toHaveBeenCalled();
   });
 
   it("sleeps the display with pmset", async () => {

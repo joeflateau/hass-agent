@@ -30,7 +30,19 @@ jobs:
 
       - name: Verify macOS command dependencies
         run: |
-          test -x "/System/Library/CoreServices/Menu Extras/User.menu/Contents/Resources/CGSession"
+          bun -e '
+            import { dlopen, FFIType } from "bun:ffi";
+            const login = dlopen(
+              "/System/Library/PrivateFrameworks/login.framework/Versions/Current/login",
+              {
+                SACLockScreenImmediate: {
+                  args: [],
+                  returns: FFIType.i32,
+                },
+              },
+            );
+            login.close();
+          '
 
       - name: Build executable
         run: bun run build

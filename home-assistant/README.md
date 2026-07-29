@@ -66,8 +66,8 @@ The agent publishes the following sensors to Home Assistant via MQTT discovery:
 
 Command buttons publish exact allowlisted IDs to
 `hass-agent/{device_id}/command`; the agent does not execute arbitrary MQTT
-payloads. Lock Screen uses `CGSession` and does not require AppleScript or
-Accessibility permission.
+payloads. Lock Screen calls macOS's native lock function through
+`login.framework` and does not require AppleScript or Accessibility permission.
 
 ## Installation
 
