@@ -58,6 +58,18 @@ The agent publishes the following sensors to Home Assistant via MQTT discovery:
 - `sensor.{device_id}_lol_assists` - Assist count
 - `sensor.{device_id}_lol_game_info` - Combined LoL data (used by custom card)
 
+#### Command Buttons
+
+- `button.{device_id}_lock_screen` - Lock the current macOS session
+- `button.{device_id}_sleep_display` - Sleep the Mac's displays
+- `button.{device_id}_start_screensaver` - Start the screen saver
+- `sensor.{device_id}_last_command` - Diagnostic command result and timestamp
+
+Command buttons publish exact allowlisted IDs to
+`hass-agent/{device_id}/command`; the agent does not execute arbitrary MQTT
+payloads. Lock Screen may require one-time Accessibility permission for the
+agent in macOS System Settings.
+
 ## Installation
 
 1. **Install hass-agent**: Build and run the agent on your macOS system
@@ -70,6 +82,7 @@ The agent publishes the following sensors to Home Assistant via MQTT discovery:
 - Get notified when your Mac's battery is low
 - Track gaming sessions and time played
 - Monitor system health and uptime
+- Lock a Mac or sleep its display from an automation or dashboard
 - Alert when external displays are connected/disconnected
 - Create gaming mode automations based on LoL game status
 

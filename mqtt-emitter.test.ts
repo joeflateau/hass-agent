@@ -55,6 +55,9 @@ describe("MqttDeviceFramework", () => {
     mockMqttClient.on.mockClear();
     mockMqttClient.once.mockClear();
     mockMqttClient.end.mockClear();
+    mockMqttClient.subscribe.mockClear();
+    mockMqttClient.connected = false;
+    mockMqttClient.options.reconnectPeriod = 5000;
     mockMqttConnect.mockClear();
     mockOs.release.mockClear();
     (mockLogger.debug as any).mockClear();
@@ -112,6 +115,10 @@ describe("MqttDeviceFramework", () => {
       );
       expect(mockMqttClient.on).toHaveBeenCalledWith(
         "reconnect",
+        expect.any(Function)
+      );
+      expect(mockMqttClient.on).toHaveBeenCalledWith(
+        "message",
         expect.any(Function)
       );
     });
@@ -223,6 +230,184 @@ describe("MqttDeviceFramework", () => {
       const emitter = framework.createDeviceEmitter("test_topic", entities);
 
       expect(emitter).toBeInstanceOf(MqttDeviceEmitter);
+    });
+  });
+
+  describe("registerCommands", () => {
+    it("publishes native Home Assistant button discovery configs", () => {
+      framework.registerCommands([
+        {
+          id: "lock_screen",
+          name: "Lock Screen",
+          icon: "mdi:lock",
+          execute: mock(async () => {}),
+        },
+      ]);
+
+      const discoveryCall = mockMqttClient.publish.mock.calls.find(
+        (call: any[]) =>
+          call[0] === "homeassistant/button/test-device/lock_screen/config"
+      );
+      expect(discoveryCall).toBeDefined();
+      expect(discoveryCall![2]).toEqual({ qos: 1, retain: true });
+      expect(JSON.parse(discoveryCall![1])).toEqual(
+        expect.objectContaining({
+          name: "Lock Screen",
+          unique_id: "test-device_lock_screen",
+          command_topic: "hass-agent/test-device/command",
+          payload_press: "lock_screen",
+          availability_topic: "homeassistant/status/test-device",
+          payload_available: "online",
+          payload_not_available: "offline",
+          icon: "mdi:lock",
+          device: expect.objectContaining({
+            identifiers: ["test-device"],
+            name: "Test Device",
+          }),
+        })
+      );
+    });
+
+    it("subscribes to the device command topic when connected", () => {
+      mockMqttClient.connected = true;
+      framework.registerCommands([
+        {
+          id: "lock_screen",
+          name: "Lock Screen",
+          execute: mock(async () => {}),
+        },
+      ]);
+
+      expect(mockMqttClient.subscribe).toHaveBeenCalledWith(
+        "hass-agent/test-device/command",
+        { qos: 1 },
+        expect.any(Function)
+      );
+    });
+
+    it("executes allowlisted commands and publishes a result", async () => {
+      const executed = Promise.withResolvers<void>();
+      const execute = mock(async () => {
+        executed.resolve();
+      });
+      framework.registerCommands([
+        {
+          id: "lock_screen",
+          name: "Lock Screen",
+          execute,
+        },
+      ]);
+      const messageHandler = mockMqttClient.on.mock.calls.find(
+        (call: any[]) => call[0] === "message"
+      )?.[1];
+
+      messageHandler?.(
+        "hass-agent/test-device/command",
+        Buffer.from("lock_screen")
+      );
+      await executed.promise;
+      await Promise.resolve();
+
+      expect(execute).toHaveBeenCalledTimes(1);
+      const resultCall = mockMqttClient.publish.mock.calls.find(
+        (call: any[]) => call[0] === "hass-agent/test-device/command/result"
+      );
+      expect(resultCall).toBeDefined();
+      expect(JSON.parse(resultCall![1])).toEqual(
+        expect.objectContaining({
+          command: "lock_screen",
+          status: "success",
+        })
+      );
+      expect(resultCall![2]).toEqual({ qos: 1, retain: true });
+    });
+
+    it("ignores commands that are not allowlisted", async () => {
+      const execute = mock(async () => {});
+      framework.registerCommands([
+        {
+          id: "lock_screen",
+          name: "Lock Screen",
+          execute,
+        },
+      ]);
+      const messageHandler = mockMqttClient.on.mock.calls.find(
+        (call: any[]) => call[0] === "message"
+      )?.[1];
+
+      messageHandler?.(
+        "hass-agent/test-device/command",
+        Buffer.from("rm -rf /")
+      );
+      await Promise.resolve();
+
+      expect(execute).not.toHaveBeenCalled();
+      expect(mockLogger.warn).toHaveBeenCalledWith(
+        "Ignored unknown MQTT command: rm -rf /"
+      );
+    });
+
+    it("publishes failed command details without throwing", async () => {
+      const execute = mock(async () => {
+        throw new Error("Accessibility permission denied");
+      });
+      framework.registerCommands([
+        {
+          id: "lock_screen",
+          name: "Lock Screen",
+          execute,
+        },
+      ]);
+      const messageHandler = mockMqttClient.on.mock.calls.find(
+        (call: any[]) => call[0] === "message"
+      )?.[1];
+
+      messageHandler?.(
+        "hass-agent/test-device/command",
+        Buffer.from("lock_screen")
+      );
+      await Bun.sleep(0);
+
+      const resultCall = mockMqttClient.publish.mock.calls.find(
+        (call: any[]) => call[0] === "hass-agent/test-device/command/result"
+      );
+      expect(JSON.parse(resultCall![1])).toEqual(
+        expect.objectContaining({
+          command: "lock_screen",
+          status: "error",
+          error: "Accessibility permission denied",
+        })
+      );
+    });
+
+    it("rejects invalid and duplicate command ids", () => {
+      expect(() =>
+        framework.registerCommands([
+          {
+            id: "lock screen",
+            name: "Lock Screen",
+            execute: mock(async () => {}),
+          },
+        ])
+      ).toThrow("Invalid MQTT command id");
+
+      framework.registerCommands([
+        {
+          id: "lock_screen",
+          name: "Lock Screen",
+          execute: mock(async () => {}),
+        },
+      ]);
+
+      expect(() =>
+        framework.registerCommands([
+          {
+            id: "lock_screen",
+            name: "Lock Screen",
+            execute: mock(async () => {}),
+          },
+        ])
+      ).toThrow("Duplicate MQTT command id");
     });
   });
 
