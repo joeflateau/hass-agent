@@ -278,22 +278,15 @@ The agent automatically registers the following entities in Home Assistant:
 
 ### Commands
 
-Each Mac automatically registers these MQTT button entities on its Home
-Assistant device:
-
-- **Lock Screen** — invokes the native Control-Command-Q lock shortcut
-- **Sleep Display** — immediately sleeps the displays with `pmset`
-- **Start Screen Saver** — launches the macOS screen saver
+Each Mac automatically registers a **Sleep Display** MQTT button on its Home
+Assistant device. It immediately sleeps the displays with `pmset`.
 
 Commands are sent to the device-scoped topic
 `hass-agent/{device_id}/command`. The agent accepts only the built-in command
-IDs (`lock_screen`, `sleep_display`, and `start_screensaver`); MQTT payloads
-cannot supply shell commands or arguments.
+ID (`sleep_display`); MQTT payloads cannot supply shell commands or arguments.
 
 The **Last Command** diagnostic sensor records the command ID, success/error
-status, timestamp, and any error message. The Lock Screen action uses System
-Events and may require one-time Accessibility permission for `hass-agent` in
-System Settings → Privacy & Security → Accessibility.
+status, timestamp, and any error message.
 
 ## League of Legends Integration
 

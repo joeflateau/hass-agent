@@ -409,6 +409,47 @@ describe("MqttDeviceFramework", () => {
         ])
       ).toThrow("Duplicate MQTT command id");
     });
+
+    it("clears retained discovery configs for retired commands", () => {
+      framework.retireCommands(["lock_screen", "start_screensaver"]);
+
+      expect(mockMqttClient.publish).toHaveBeenCalledWith(
+        "homeassistant/button/test-device/lock_screen/config",
+        "",
+        { qos: 1, retain: true }
+      );
+      expect(mockMqttClient.publish).toHaveBeenCalledWith(
+        "homeassistant/button/test-device/start_screensaver/config",
+        "",
+        { qos: 1, retain: true }
+      );
+    });
+
+    it("does not execute a retired command", async () => {
+      const execute = mock(async () => {});
+      framework.registerCommands([
+        {
+          id: "lock_screen",
+          name: "Lock Screen",
+          execute,
+        },
+      ]);
+      framework.retireCommands(["lock_screen"]);
+      const messageHandler = mockMqttClient.on.mock.calls.find(
+        (call: any[]) => call[0] === "message"
+      )?.[1];
+
+      messageHandler?.(
+        "hass-agent/test-device/command",
+        Buffer.from("lock_screen")
+      );
+      await Promise.resolve();
+
+      expect(execute).not.toHaveBeenCalled();
+      expect(mockLogger.warn).toHaveBeenCalledWith(
+        "Ignored unknown MQTT command: lock_screen"
+      );
+    });
   });
 
   describe("MQTT event handlers", () => {

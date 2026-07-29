@@ -8,6 +8,11 @@
 import { spawn } from "child_process";
 import type { MqttCommandDefinition } from "./mqtt-emitter.ts";
 
+export const RETIRED_MACOS_COMMAND_IDS = [
+  "lock_screen",
+  "start_screensaver",
+] as const;
+
 export type ProcessRunner = (
   executable: string,
   args: readonly string[]
@@ -50,26 +55,10 @@ export function createMacOSCommands(
 ): MqttCommandDefinition[] {
   return [
     {
-      id: "lock_screen",
-      name: "Lock Screen",
-      icon: "mdi:lock",
-      execute: () =>
-        runner("/usr/bin/osascript", [
-          "-e",
-          'tell application "System Events" to key code 12 using {control down, command down}',
-        ]),
-    },
-    {
       id: "sleep_display",
       name: "Sleep Display",
       icon: "mdi:monitor-off",
       execute: () => runner("/usr/bin/pmset", ["displaysleepnow"]),
-    },
-    {
-      id: "start_screensaver",
-      name: "Start Screen Saver",
-      icon: "mdi:monitor-shimmer",
-      execute: () => runner("/usr/bin/open", ["-a", "ScreenSaverEngine"]),
     },
   ];
 }

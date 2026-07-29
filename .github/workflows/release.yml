@@ -57,20 +57,32 @@ jobs:
           lipo -create -output hass-agent hass-agent-arm64 hass-agent-x64
           chmod +x hass-agent
 
+      - name: Sign executables
+        run: |
+          codesign --force --sign - hass-agent-arm64
+          codesign --force --sign - hass-agent-x64
+          codesign --force --sign - hass-agent
+
       - name: Verify executables
         run: |
           echo "=== Universal Binary ==="
           ls -la hass-agent
           file hass-agent
           lipo -info hass-agent
+          codesign --verify --strict --verbose=2 hass-agent
           echo ""
           echo "=== ARM64 Binary ==="
           ls -la hass-agent-arm64
           file hass-agent-arm64
+          codesign --verify --strict --verbose=2 hass-agent-arm64
           echo ""
           echo "=== x64 Binary ==="
           ls -la hass-agent-x64
           file hass-agent-x64
+          codesign --verify --strict --verbose=2 hass-agent-x64
+          echo ""
+          echo "=== Runtime smoke test ==="
+          ./hass-agent --help
 
       - name: Prepare install script
         run: |

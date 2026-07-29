@@ -29,7 +29,10 @@ import {
   type DisplayInfo,
 } from "./display-status-reader.ts";
 import { LoLStatusReader, type LoLGameStatus } from "./lol-status-reader.ts";
-import { createMacOSCommands } from "./macos-commands.ts";
+import {
+  createMacOSCommands,
+  RETIRED_MACOS_COMMAND_IDS,
+} from "./macos-commands.ts";
 import {
   MqttDeviceFramework,
   type MqttConfig,
@@ -168,6 +171,7 @@ class MacOSPowerAgent {
 
     this.mqttFramework = new MqttDeviceFramework(mqttConfig, logger);
     this.mqttFramework.registerCommands(createMacOSCommands());
+    this.mqttFramework.retireCommands(RETIRED_MACOS_COMMAND_IDS);
 
     // Create device emitters
     this.batteryEmitter = this.mqttFramework.createDeviceEmitter<BatteryInfo>(
