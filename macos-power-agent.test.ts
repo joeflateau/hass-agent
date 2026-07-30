@@ -151,12 +151,15 @@ describe("MacOSPowerAgent", () => {
       );
       expect(mockMqttFramework.registerCommands).toHaveBeenCalledWith([
         expect.objectContaining({
+          id: "lock_screen",
+          name: "Lock Screen",
+        }),
+        expect.objectContaining({
           id: "sleep_display",
           name: "Sleep Display",
         }),
       ]);
       expect(mockMqttFramework.retireCommands).toHaveBeenCalledWith([
-        "lock_screen",
         "start_screensaver",
       ]);
     });

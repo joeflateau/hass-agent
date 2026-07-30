@@ -9,6 +9,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Home Assistant MQTT button for Lock Screen using macOS's native
+  `login.framework`, without AppleScript or Accessibility permission.
 - Home Assistant MQTT button for Sleep Display, backed by a device-scoped
   allowlisted command handler.
 - Last Command diagnostic sensor with success/error details.
@@ -19,7 +21,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Removed
 
-- Lock Screen and Start Screen Saver Home Assistant commands.
+- Start Screen Saver Home Assistant command.
 
 ### Fixed
 

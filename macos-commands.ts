@@ -5,18 +5,26 @@
  * shell. This keeps MQTT payloads from becoming an arbitrary command surface.
  */
 
+import { dlopen, FFIType } from "bun:ffi";
 import { spawn } from "child_process";
 import type { MqttCommandDefinition } from "./mqtt-emitter.ts";
 
-export const RETIRED_MACOS_COMMAND_IDS = [
-  "lock_screen",
-  "start_screensaver",
-] as const;
+export const RETIRED_MACOS_COMMAND_IDS = ["start_screensaver"] as const;
+export const LOGIN_FRAMEWORK_PATH =
+  "/System/Library/PrivateFrameworks/login.framework/Versions/Current/login";
+const LOGIN_FRAMEWORK_SYMBOLS = {
+  SACLockScreenImmediate: {
+    args: [],
+    returns: FFIType.i32,
+  },
+} as const;
 
 export type ProcessRunner = (
   executable: string,
   args: readonly string[]
 ) => Promise<void>;
+
+export type ScreenLocker = () => Promise<void>;
 
 export async function runProcess(
   executable: string,
@@ -50,10 +58,39 @@ export async function runProcess(
   });
 }
 
+export async function lockScreen(): Promise<void> {
+  const loginFramework = dlopen(LOGIN_FRAMEWORK_PATH, LOGIN_FRAMEWORK_SYMBOLS);
+
+  try {
+    const result = loginFramework.symbols.SACLockScreenImmediate();
+    if (result !== 0) {
+      throw new Error(`SACLockScreenImmediate failed with code ${result}`);
+    }
+  } finally {
+    loginFramework.close();
+  }
+}
+
+/**
+ * Verify that the private macOS lock function is still available without
+ * invoking it (which would lock the test runner).
+ */
+export function verifyLockScreenSupport(): void {
+  const loginFramework = dlopen(LOGIN_FRAMEWORK_PATH, LOGIN_FRAMEWORK_SYMBOLS);
+  loginFramework.close();
+}
+
 export function createMacOSCommands(
-  runner: ProcessRunner = runProcess
+  runner: ProcessRunner = runProcess,
+  screenLocker: ScreenLocker = lockScreen
 ): MqttCommandDefinition[] {
   return [
+    {
+      id: "lock_screen",
+      name: "Lock Screen",
+      icon: "mdi:lock",
+      execute: screenLocker,
+    },
     {
       id: "sleep_display",
       name: "Sleep Display",

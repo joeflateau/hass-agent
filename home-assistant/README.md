@@ -60,12 +60,14 @@ The agent publishes the following sensors to Home Assistant via MQTT discovery:
 
 #### Command Buttons
 
+- `button.{device_id}_lock_screen` - Lock the current macOS session
 - `button.{device_id}_sleep_display` - Sleep the Mac's displays
 - `sensor.{device_id}_last_command` - Diagnostic command result and timestamp
 
-The command button publishes its exact allowlisted ID to
+Command buttons publish exact allowlisted IDs to
 `hass-agent/{device_id}/command`; the agent does not execute arbitrary MQTT
-payloads.
+payloads. Lock Screen calls macOS's native lock function through
+`login.framework` and does not require AppleScript or Accessibility permission.
 
 ## Installation
 
