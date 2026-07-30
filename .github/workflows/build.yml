@@ -28,22 +28,6 @@ jobs:
       - name: Type check
         run: bun run tsc --noEmit
 
-      - name: Verify macOS command dependencies
-        run: |
-          bun -e '
-            import { dlopen, FFIType } from "bun:ffi";
-            const login = dlopen(
-              "/System/Library/PrivateFrameworks/login.framework/Versions/Current/login",
-              {
-                SACLockScreenImmediate: {
-                  args: [],
-                  returns: FFIType.i32,
-                },
-              },
-            );
-            login.close();
-          '
-
       - name: Build executable
         run: bun run build
 

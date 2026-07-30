@@ -2,9 +2,16 @@ import { describe, expect, it, mock } from "bun:test";
 import {
   createMacOSCommands,
   RETIRED_MACOS_COMMAND_IDS,
+  verifyLockScreenSupport,
 } from "./macos-commands.ts";
 
 describe("createMacOSCommands", () => {
+  if (process.platform === "darwin") {
+    it("finds the native macOS lock function without invoking it", () => {
+      expect(verifyLockScreenSupport).not.toThrow();
+    });
+  }
+
   it("defines the safe macOS command allowlist", () => {
     const commands = createMacOSCommands(mock(async () => {}));
 

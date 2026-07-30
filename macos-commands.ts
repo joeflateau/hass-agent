@@ -12,6 +12,12 @@ import type { MqttCommandDefinition } from "./mqtt-emitter.ts";
 export const RETIRED_MACOS_COMMAND_IDS = ["start_screensaver"] as const;
 export const LOGIN_FRAMEWORK_PATH =
   "/System/Library/PrivateFrameworks/login.framework/Versions/Current/login";
+const LOGIN_FRAMEWORK_SYMBOLS = {
+  SACLockScreenImmediate: {
+    args: [],
+    returns: FFIType.i32,
+  },
+} as const;
 
 export type ProcessRunner = (
   executable: string,
@@ -53,12 +59,7 @@ export async function runProcess(
 }
 
 export async function lockScreen(): Promise<void> {
-  const loginFramework = dlopen(LOGIN_FRAMEWORK_PATH, {
-    SACLockScreenImmediate: {
-      args: [],
-      returns: FFIType.i32,
-    },
-  });
+  const loginFramework = dlopen(LOGIN_FRAMEWORK_PATH, LOGIN_FRAMEWORK_SYMBOLS);
 
   try {
     const result = loginFramework.symbols.SACLockScreenImmediate();
@@ -68,6 +69,15 @@ export async function lockScreen(): Promise<void> {
   } finally {
     loginFramework.close();
   }
+}
+
+/**
+ * Verify that the private macOS lock function is still available without
+ * invoking it (which would lock the test runner).
+ */
+export function verifyLockScreenSupport(): void {
+  const loginFramework = dlopen(LOGIN_FRAMEWORK_PATH, LOGIN_FRAMEWORK_SYMBOLS);
+  loginFramework.close();
 }
 
 export function createMacOSCommands(
