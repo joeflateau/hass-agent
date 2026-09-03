@@ -1,8 +1,9 @@
 import { describe, expect, it, vi } from "vitest";
 import {
   LEAGUE_GAME_BUNDLE_ID,
-  resolveLeagueCaptureOwner,
+  resolveLeagueGameProcesses,
   signalLeagueGameProcess,
+  terminateLeagueGameProcesses,
   type LeagueGameProcessIdentity,
   type LeagueProcessDependencies,
   type MacOSProcessSnapshot,
@@ -41,26 +42,28 @@ function createDependencies(
         ? LEAGUE_GAME_BUNDLE_ID
         : "LeagueofLegends"
     ),
-    frontmostPid: vi.fn(() => 4242),
-    gameApiOnline: vi.fn(async () => true),
     signal: vi.fn(() => {}),
     ...overrides,
   };
 }
 
-describe("resolveLeagueCaptureOwner", () => {
-  it("accepts one foreground game process from a verified Riot game bundle", async () => {
+function createIdentity(
+  snapshot: MacOSProcessSnapshot
+): LeagueGameProcessIdentity {
+  return {
+    ...snapshot,
+    bundlePath:
+      "/Users/jotham/Games/League of Legends.app/Contents/LoL/Game/League of Legends.app",
+  };
+}
+
+describe("resolveLeagueGameProcesses", () => {
+  it("accepts a same-user game process from the verified Riot game bundle", async () => {
     const snapshot = createSnapshot();
-    const dependencies = createDependencies([snapshot]);
 
     await expect(
-      resolveLeagueCaptureOwner(dependencies)
-    ).resolves.toEqual({
-      ...snapshot,
-      bundlePath:
-        "/Users/jotham/Games/League of Legends.app/Contents/LoL/Game/League of Legends.app",
-    });
-    expect(dependencies.gameApiOnline).toHaveBeenCalledTimes(1);
+      resolveLeagueGameProcesses(createDependencies([snapshot]))
+    ).resolves.toEqual([createIdentity(snapshot)]);
   });
 
   it("supports the alternate LeagueOfLegends inner bundle spelling", async () => {
@@ -72,8 +75,10 @@ describe("resolveLeagueCaptureOwner", () => {
     });
 
     await expect(
-      resolveLeagueCaptureOwner(createDependencies([snapshot]))
-    ).resolves.toMatchObject({ pid: snapshot.pid });
+      resolveLeagueGameProcesses(createDependencies([snapshot]))
+    ).resolves.toEqual([
+      expect.objectContaining({ pid: snapshot.pid }),
+    ]);
   });
 
   it("rejects a fake process with the League basename outside the Riot game bundle", async () => {
@@ -83,22 +88,29 @@ describe("resolveLeagueCaptureOwner", () => {
     const readBundleValue = vi.fn(async () => "unexpected");
 
     await expect(
-      resolveLeagueCaptureOwner(
+      resolveLeagueGameProcesses(
         createDependencies([snapshot], { readBundleValue })
       )
-    ).resolves.toBeUndefined();
+    ).resolves.toEqual([]);
     expect(readBundleValue).not.toHaveBeenCalled();
   });
 
-  it("never mistakes League Client UX for the in-game process", async () => {
-    const snapshot = createSnapshot({
+  it("never mistakes League Client UX or Riot Client for the game", async () => {
+    const leagueClientUx = createSnapshot({
       executablePath:
         "/Applications/League of Legends.app/Contents/LoL/LeagueClient.app/Contents/MacOS/LeagueClientUx",
     });
+    const riotClient = createSnapshot({
+      pid: 4243,
+      executablePath:
+        "/Applications/Riot Client.app/Contents/MacOS/RiotClientServices",
+    });
 
     await expect(
-      resolveLeagueCaptureOwner(createDependencies([snapshot]))
-    ).resolves.toBeUndefined();
+      resolveLeagueGameProcesses(
+        createDependencies([leagueClientUx, riotClient])
+      )
+    ).resolves.toEqual([]);
   });
 
   it("rejects the wrong bundle identifier or executable", async () => {
@@ -119,83 +131,45 @@ describe("resolveLeagueCaptureOwner", () => {
     });
 
     await expect(
-      resolveLeagueCaptureOwner(wrongBundle)
-    ).resolves.toBeUndefined();
+      resolveLeagueGameProcesses(wrongBundle)
+    ).resolves.toEqual([]);
     await expect(
-      resolveLeagueCaptureOwner(wrongExecutable)
-    ).resolves.toBeUndefined();
+      resolveLeagueGameProcesses(wrongExecutable)
+    ).resolves.toEqual([]);
   });
 
-  it("refuses zero or multiple matching game processes", async () => {
-    await expect(
-      resolveLeagueCaptureOwner(createDependencies([]))
-    ).resolves.toBeUndefined();
-
+  it("returns every verified game process instead of requiring exactly one", async () => {
     const first = createSnapshot();
     const second = createSnapshot({ pid: 4243 });
-    await expect(
-      resolveLeagueCaptureOwner(
-        createDependencies([first, second], {
-          frontmostPid: vi.fn(() => first.pid),
-        })
-      )
-    ).resolves.toBeUndefined();
-  });
-
-  it("refuses a background League game when another app is frontmost", async () => {
-    const snapshot = createSnapshot();
 
     await expect(
-      resolveLeagueCaptureOwner(
-        createDependencies([snapshot], {
-          frontmostPid: vi.fn(() => 9999),
-        })
+      resolveLeagueGameProcesses(
+        createDependencies([first, second])
       )
-    ).resolves.toBeUndefined();
-  });
-
-  it("requires a fresh successful Game Client API probe", async () => {
-    const snapshot = createSnapshot();
-
-    await expect(
-      resolveLeagueCaptureOwner(
-        createDependencies([snapshot], {
-          gameApiOnline: vi.fn(async () => false),
-        })
-      )
-    ).resolves.toBeUndefined();
+    ).resolves.toEqual([createIdentity(first), createIdentity(second)]);
   });
 
   it("rejects a matching process owned by another user", async () => {
     const snapshot = createSnapshot({ uid: 502 });
 
     await expect(
-      resolveLeagueCaptureOwner(createDependencies([snapshot]))
-    ).resolves.toBeUndefined();
+      resolveLeagueGameProcesses(createDependencies([snapshot]))
+    ).resolves.toEqual([]);
   });
 });
 
 describe("signalLeagueGameProcess", () => {
-  function createIdentity(
-    snapshot: MacOSProcessSnapshot
-  ): LeagueGameProcessIdentity {
-    return {
-      ...snapshot,
-      bundlePath:
-        "/Users/jotham/Games/League of Legends.app/Contents/LoL/Game/League of Legends.app",
-    };
-  }
-
   it("signals only the exact revalidated PID", () => {
     const snapshot = createSnapshot();
     const dependencies = createDependencies([snapshot]);
 
-    signalLeagueGameProcess(
-      createIdentity(snapshot),
-      "SIGTERM",
-      dependencies
-    );
-
+    expect(
+      signalLeagueGameProcess(
+        createIdentity(snapshot),
+        "SIGTERM",
+        dependencies
+      )
+    ).toBe(true);
     expect(dependencies.signal).toHaveBeenCalledWith(
       snapshot.pid,
       "SIGTERM"
@@ -209,13 +183,13 @@ describe("signalLeagueGameProcess", () => {
     });
     const dependencies = createDependencies([replacement]);
 
-    expect(() =>
+    expect(
       signalLeagueGameProcess(
         createIdentity(original),
         "SIGKILL",
         dependencies
       )
-    ).toThrow("changed before SIGKILL");
+    ).toBe(false);
     expect(dependencies.signal).not.toHaveBeenCalled();
   });
 
@@ -227,13 +201,135 @@ describe("signalLeagueGameProcess", () => {
     });
     const dependencies = createDependencies([replacement]);
 
-    expect(() =>
+    expect(
       signalLeagueGameProcess(
         createIdentity(original),
         "SIGKILL",
         dependencies
       )
-    ).toThrow("changed before SIGKILL");
+    ).toBe(false);
     expect(dependencies.signal).not.toHaveBeenCalled();
+  });
+});
+
+describe("terminateLeagueGameProcesses", () => {
+  it("does nothing when no verified game process is running", async () => {
+    const dependencies = createDependencies([]);
+
+    await terminateLeagueGameProcesses(dependencies);
+
+    expect(dependencies.signal).not.toHaveBeenCalled();
+  });
+
+  it("terminates the exact game PID with SIGTERM", async () => {
+    const snapshot = createSnapshot();
+    let current: MacOSProcessSnapshot | undefined = snapshot;
+    const signal = vi.fn(() => {
+      current = undefined;
+    });
+    const dependencies = createDependencies([snapshot], {
+      processSource: {
+        list: vi.fn(() => [snapshot]),
+        get: vi.fn(() => current),
+      },
+      signal,
+    });
+
+    await terminateLeagueGameProcesses(dependencies);
+
+    expect(signal).toHaveBeenCalledTimes(1);
+    expect(signal).toHaveBeenCalledWith(snapshot.pid, "SIGTERM");
+  });
+
+  it("force-terminates the game when it ignores SIGTERM", async () => {
+    const snapshot = createSnapshot();
+    let current: MacOSProcessSnapshot | undefined = snapshot;
+    const signal = vi.fn((_pid: number, sentSignal: NodeJS.Signals) => {
+      if (sentSignal === "SIGKILL") {
+        current = undefined;
+      }
+    });
+    const dependencies = createDependencies([snapshot], {
+      processSource: {
+        list: vi.fn(() => [snapshot]),
+        get: vi.fn(() => current),
+      },
+      signal,
+    });
+
+    await terminateLeagueGameProcesses(dependencies, {
+      termTimeoutMs: 0,
+      killTimeoutMs: 0,
+      pollIntervalMs: 1,
+      wait: vi.fn(async () => {}),
+    });
+
+    expect(signal.mock.calls).toEqual([
+      [snapshot.pid, "SIGTERM"],
+      [snapshot.pid, "SIGKILL"],
+    ]);
+  });
+
+  it("fails instead of locking while the exact PID survives SIGKILL", async () => {
+    const snapshot = createSnapshot();
+    const dependencies = createDependencies([snapshot]);
+
+    await expect(
+      terminateLeagueGameProcesses(dependencies, {
+        termTimeoutMs: 0,
+        killTimeoutMs: 0,
+        pollIntervalMs: 1,
+        wait: vi.fn(async () => {}),
+      })
+    ).rejects.toThrow(
+      `League game process ${snapshot.pid} remained alive after SIGKILL`
+    );
+    expect(dependencies.signal).toHaveBeenNthCalledWith(
+      1,
+      snapshot.pid,
+      "SIGTERM"
+    );
+    expect(dependencies.signal).toHaveBeenNthCalledWith(
+      2,
+      snapshot.pid,
+      "SIGKILL"
+    );
+  });
+
+  it("terminates all verified game PIDs while leaving client UX alone", async () => {
+    const first = createSnapshot();
+    const second = createSnapshot({ pid: 4243 });
+    const leagueClientUx = createSnapshot({
+      pid: 4244,
+      executablePath:
+        "/Applications/League of Legends.app/Contents/LoL/LeagueClient.app/Contents/MacOS/LeagueClientUx",
+    });
+    const current = new Map(
+      [first, second, leagueClientUx].map((snapshot) => [
+        snapshot.pid,
+        snapshot,
+      ])
+    );
+    const signal = vi.fn((pid: number) => {
+      current.delete(pid);
+    });
+    const dependencies = createDependencies(
+      [first, second, leagueClientUx],
+      {
+        processSource: {
+          list: vi.fn(() => [first, second, leagueClientUx]),
+          get: vi.fn((pid) => current.get(pid)),
+        },
+        signal,
+      }
+    );
+
+    await terminateLeagueGameProcesses(dependencies);
+
+    expect(signal.mock.calls).toEqual([
+      [first.pid, "SIGTERM"],
+      [second.pid, "SIGTERM"],
+    ]);
+    expect(current.has(leagueClientUx.pid)).toBe(true);
   });
 });

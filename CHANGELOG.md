@@ -26,6 +26,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   Application while preserving the native `SACLockScreenImmediate` lock call
   through Node's built-in FFI.
 - Migrated development and tests from Bun to npm and Vitest.
+- Lock Screen now terminates every verified same-user League of Legends game
+  process before attempting the macOS lock, without requiring the game to be
+  frontmost, waiting for Finder to fail, or depending on Game Client API
+  telemetry. Riot Client and League Client UX remain untouched.
 
 ### Deprecated
 

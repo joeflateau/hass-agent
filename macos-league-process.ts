@@ -3,18 +3,14 @@ import { realpathSync } from "fs";
 import { basename, dirname, join } from "path";
 import { promisify } from "util";
 import { dlopen } from "node:ffi";
-import { Agent, fetch } from "undici";
 
 export const LIB_SYSTEM_PATH = "/usr/lib/libSystem.B.dylib";
-export const LIB_OBJC_PATH = "/usr/lib/libobjc.A.dylib";
-export const APP_KIT_PATH =
-  "/System/Library/Frameworks/AppKit.framework/Versions/Current/AppKit";
 export const PLUTIL_PATH = "/usr/bin/plutil";
 export const LEAGUE_GAME_BUNDLE_ID =
   "com.riotgames.LeagueofLegends.GameClient";
-export const LEAGUE_GAME_API_URL =
-  "https://127.0.0.1:2999/liveclientdata/gamestats";
-export const LEAGUE_GAME_API_TIMEOUT_MS = 1_000;
+export const LEAGUE_GAME_TERM_TIMEOUT_MS = 3_000;
+export const LEAGUE_GAME_KILL_TIMEOUT_MS = 2_000;
+export const LEAGUE_GAME_EXIT_POLL_INTERVAL_MS = 50;
 
 const PROC_ALL_PIDS = 1;
 const PROC_PIDTBSDINFO = 3;
@@ -36,21 +32,6 @@ const LIBPROC_SYMBOLS = {
   proc_pidinfo: {
     arguments: ["i32", "i32", "u64", "buffer", "i32"],
     return: "i32",
-  },
-} as const;
-
-const OBJC_SYMBOLS = {
-  objc_getClass: {
-    arguments: ["string"],
-    return: "pointer",
-  },
-  sel_registerName: {
-    arguments: ["string"],
-    return: "pointer",
-  },
-  objc_msgSend: {
-    arguments: ["pointer", "pointer"],
-    return: "pointer",
   },
 } as const;
 
@@ -80,9 +61,14 @@ export type LeagueProcessDependencies = {
   currentUid: () => number;
   canonicalizePath: (path: string) => string;
   readBundleValue: (plistPath: string, key: string) => Promise<string>;
-  frontmostPid: () => number | undefined;
-  gameApiOnline: () => Promise<boolean>;
   signal: (pid: number, signal: NodeJS.Signals) => void;
+};
+
+export type LeagueGameTerminationOptions = {
+  termTimeoutMs?: number;
+  killTimeoutMs?: number;
+  pollIntervalMs?: number;
+  wait?: (milliseconds: number) => Promise<void>;
 };
 
 const execFileAsync = promisify(execFile);
@@ -215,57 +201,6 @@ export function createNativeProcessSource(): MacOSProcessSource {
   };
 }
 
-export function getFrontmostApplicationPid(): number | undefined {
-  // Loading AppKit makes NSWorkspace available to the Objective-C runtime.
-  const appKit = dlopen(APP_KIT_PATH, {});
-  const objc = dlopen(LIB_OBJC_PATH, OBJC_SYMBOLS);
-  try {
-    const workspaceClass = objc.functions.objc_getClass("NSWorkspace");
-    const sharedWorkspaceSelector =
-      objc.functions.sel_registerName("sharedWorkspace");
-    const frontmostSelector =
-      objc.functions.sel_registerName("frontmostApplication");
-    const pidSelector =
-      objc.functions.sel_registerName("processIdentifier");
-    if (
-      workspaceClass === null ||
-      sharedWorkspaceSelector === null ||
-      frontmostSelector === null ||
-      pidSelector === null
-    ) {
-      return undefined;
-    }
-
-    const workspace = objc.functions.objc_msgSend(
-      workspaceClass,
-      sharedWorkspaceSelector
-    );
-    if (workspace === null) {
-      return undefined;
-    }
-    const application = objc.functions.objc_msgSend(
-      workspace,
-      frontmostSelector
-    );
-    if (application === null) {
-      return undefined;
-    }
-    const rawPid = objc.functions.objc_msgSend(
-      application,
-      pidSelector
-    );
-    if (rawPid === null) {
-      return undefined;
-    }
-
-    const pid = Number(rawPid & 0xffff_ffffn);
-    return Number.isInteger(pid) && pid > 1 ? pid : undefined;
-  } finally {
-    objc.lib.close();
-    appKit.lib.close();
-  }
-}
-
 export async function readPlistValue(
   plistPath: string,
   key: string
@@ -281,40 +216,12 @@ export async function readPlistValue(
   return stdout.trim();
 }
 
-export async function isLeagueGameApiOnline(): Promise<boolean> {
-  const dispatcher = new Agent({
-    connect: { rejectUnauthorized: false },
-  });
-  try {
-    const response = await fetch(LEAGUE_GAME_API_URL, {
-      dispatcher,
-      signal: AbortSignal.timeout(LEAGUE_GAME_API_TIMEOUT_MS),
-    });
-    if (!response.ok) {
-      return false;
-    }
-    const payload: unknown = await response.json();
-    return (
-      typeof payload === "object" &&
-      payload !== null &&
-      typeof (payload as { gameTime?: unknown }).gameTime === "number" &&
-      typeof (payload as { gameMode?: unknown }).gameMode === "string"
-    );
-  } catch {
-    return false;
-  } finally {
-    await dispatcher.close();
-  }
-}
-
 export function createDefaultLeagueProcessDependencies(): LeagueProcessDependencies {
   return {
     processSource: createNativeProcessSource(),
     currentUid: () => process.getuid?.() ?? -1,
     canonicalizePath: (path) => realpathSync.native(path),
     readBundleValue: readPlistValue,
-    frontmostPid: getFrontmostApplicationPid,
-    gameApiOnline: isLeagueGameApiOnline,
     signal: (pid, signal) => process.kill(pid, signal),
   };
 }
@@ -428,11 +335,11 @@ async function validateLeagueSnapshot(
   };
 }
 
-export async function resolveLeagueCaptureOwner(
+export async function resolveLeagueGameProcesses(
   dependencies: LeagueProcessDependencies =
     createDefaultLeagueProcessDependencies()
-): Promise<LeagueGameProcessIdentity | undefined> {
-  const candidates = (
+): Promise<LeagueGameProcessIdentity[]> {
+  return (
     await Promise.all(
       dependencies.processSource
         .list()
@@ -444,21 +351,6 @@ export async function resolveLeagueCaptureOwner(
     (candidate): candidate is LeagueGameProcessIdentity =>
       candidate !== undefined
   );
-
-  if (candidates.length !== 1) {
-    return undefined;
-  }
-  const candidate = candidates[0];
-  if (!candidate) {
-    return undefined;
-  }
-  if (
-    dependencies.frontmostPid() !== candidate.pid ||
-    !(await dependencies.gameApiOnline())
-  ) {
-    return undefined;
-  }
-  return candidate;
 }
 
 export function signalLeagueGameProcess(
@@ -466,7 +358,7 @@ export function signalLeagueGameProcess(
   signal: NodeJS.Signals,
   dependencies: LeagueProcessDependencies =
     createDefaultLeagueProcessDependencies()
-): void {
+): boolean {
   const current = dependencies.processSource.get(identity.pid);
   let currentExecutablePath: string | undefined;
   try {
@@ -482,9 +374,96 @@ export function signalLeagueGameProcess(
     currentExecutablePath !== identity.executablePath ||
     !sameStartTime(current.startTime, identity.startTime)
   ) {
-    throw new Error(
-      `League game process ${identity.pid} changed before ${signal}`
-    );
+    return false;
   }
   dependencies.signal(identity.pid, signal);
+  return true;
+}
+
+function isLeagueGameProcessRunning(
+  identity: LeagueGameProcessIdentity,
+  dependencies: LeagueProcessDependencies
+): boolean {
+  const current = dependencies.processSource.get(identity.pid);
+  let currentExecutablePath: string | undefined;
+  try {
+    currentExecutablePath = current
+      ? dependencies.canonicalizePath(current.executablePath)
+      : undefined;
+  } catch {
+    currentExecutablePath = undefined;
+  }
+  return Boolean(
+    current &&
+      current.uid === identity.uid &&
+      currentExecutablePath === identity.executablePath &&
+      sameStartTime(current.startTime, identity.startTime)
+  );
+}
+
+async function waitForLeagueGameProcessExit(
+  identity: LeagueGameProcessIdentity,
+  timeoutMs: number,
+  pollIntervalMs: number,
+  dependencies: LeagueProcessDependencies,
+  wait: (milliseconds: number) => Promise<void>
+): Promise<boolean> {
+  const pollCount = Math.ceil(timeoutMs / pollIntervalMs);
+  for (let poll = 0; poll <= pollCount; poll += 1) {
+    if (!isLeagueGameProcessRunning(identity, dependencies)) {
+      return true;
+    }
+    if (poll < pollCount) {
+      await wait(pollIntervalMs);
+    }
+  }
+  return false;
+}
+
+export async function terminateLeagueGameProcesses(
+  dependencies: LeagueProcessDependencies =
+    createDefaultLeagueProcessDependencies(),
+  options: LeagueGameTerminationOptions = {}
+): Promise<void> {
+  const {
+    termTimeoutMs = LEAGUE_GAME_TERM_TIMEOUT_MS,
+    killTimeoutMs = LEAGUE_GAME_KILL_TIMEOUT_MS,
+    pollIntervalMs = LEAGUE_GAME_EXIT_POLL_INTERVAL_MS,
+    wait = (milliseconds) =>
+      new Promise((resolve) => setTimeout(resolve, milliseconds)),
+  } = options;
+  const identities = await resolveLeagueGameProcesses(dependencies);
+
+  for (const identity of identities) {
+    if (!signalLeagueGameProcess(identity, "SIGTERM", dependencies)) {
+      continue;
+    }
+    if (
+      await waitForLeagueGameProcessExit(
+        identity,
+        termTimeoutMs,
+        pollIntervalMs,
+        dependencies,
+        wait
+      )
+    ) {
+      continue;
+    }
+    if (!signalLeagueGameProcess(identity, "SIGKILL", dependencies)) {
+      continue;
+    }
+    if (
+      !(await waitForLeagueGameProcessExit(
+        identity,
+        killTimeoutMs,
+        pollIntervalMs,
+        dependencies,
+        wait
+      ))
+    ) {
+      throw new Error(
+        `League game process ${identity.pid} remained alive after SIGKILL`
+      );
+    }
+  }
 }

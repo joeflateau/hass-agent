@@ -311,15 +311,14 @@ Each Mac automatically registers these MQTT buttons on its Home Assistant
 device:
 
 - **Lock Screen** — invokes macOS's native lock function through
-  `login.framework`; if an application has exclusively captured a display,
-  the agent activates Finder and confirms the owning application relinquishes
-  it first. If League of Legends keeps its true-fullscreen capture, the agent
-  requires a single foreground process from the verified Riot game bundle and
-  a fresh Game Client API response. It then terminates that exact PID, with a
-  PID/start-time/path recheck before any forced termination, while leaving Riot
-  Client and League Client UX running. The agent verifies that WindowServer
-  released the display before locking. This does not require AppleScript or
-  Accessibility permission
+  `login.framework`. Before every lock, the agent terminates every same-user
+  League game process whose executable path and bundle metadata match Riot's
+  inner game bundle. It revalidates each PID, executable path, owner, and start
+  time before signaling and before any forced termination, while deliberately
+  leaving Riot Client and League Client UX running. The agent then activates
+  Finder if another application still has an exclusive display capture and
+  verifies that WindowServer released it before locking. This does not require
+  AppleScript or Accessibility permission
 - **Sleep Display** — immediately sleeps the displays with `pmset`
 
 Commands are sent to the device-scoped topic

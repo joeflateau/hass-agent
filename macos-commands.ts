@@ -9,16 +9,13 @@ import { dlopen } from "node:ffi";
 import { spawn } from "child_process";
 import type { MqttCommandDefinition } from "./mqtt-emitter.ts";
 import {
-  DisplayCaptureReleaseTimeoutError,
   releaseCapturedDisplayForLock,
   verifyDisplayCaptureSupport,
   type DisplayCaptureReleaseOptions,
   type DisplayCaptureReleaseRequester,
 } from "./macos-display-capture.ts";
 import {
-  resolveLeagueCaptureOwner,
-  signalLeagueGameProcess,
-  type LeagueGameProcessIdentity,
+  terminateLeagueGameProcesses,
 } from "./macos-league-process.ts";
 
 export const RETIRED_MACOS_COMMAND_IDS = ["start_screensaver"] as const;
@@ -26,8 +23,6 @@ export const LOGIN_FRAMEWORK_PATH =
   "/System/Library/PrivateFrameworks/login.framework/Versions/Current/login";
 export const OPEN_APPLICATION_PATH = "/usr/bin/open";
 export const FINDER_BUNDLE_ID = "com.apple.finder";
-export const LEAGUE_GAME_TERM_TIMEOUT_MS = 3_000;
-export const LEAGUE_GAME_KILL_TIMEOUT_MS = 2_000;
 const LOGIN_FRAMEWORK_SYMBOLS = {
   SACLockScreenImmediate: {
     arguments: [],
@@ -46,13 +41,7 @@ export type DisplayCaptureReleaser = (
   requestRelease: DisplayCaptureReleaseRequester,
   options?: DisplayCaptureReleaseOptions
 ) => Promise<void>;
-export type LeagueCaptureOwnerResolver = () => Promise<
-  LeagueGameProcessIdentity | undefined
->;
-export type LeagueProcessSignaler = (
-  identity: LeagueGameProcessIdentity,
-  signal: NodeJS.Signals
-) => void;
+export type LeagueProcessTerminator = () => Promise<void>;
 
 export async function runProcess(
   executable: string,
@@ -107,72 +96,14 @@ export async function lockScreen(
   releaseDisplayCapture: DisplayCaptureReleaser =
     releaseCapturedDisplayForLock,
   nativeScreenLocker: NativeScreenLocker = callNativeLockScreen,
-  resolveLeagueOwner: LeagueCaptureOwnerResolver =
-    resolveLeagueCaptureOwner,
-  signalLeagueProcess: LeagueProcessSignaler =
-    signalLeagueGameProcess
+  terminateLeagueProcesses: LeagueProcessTerminator =
+    terminateLeagueGameProcesses
 ): Promise<void> {
-  let leagueCaptureOwner: LeagueGameProcessIdentity | undefined;
-  let leagueOwnerResolutionError: unknown;
-  try {
-    await releaseDisplayCapture(
-      () => runner(OPEN_APPLICATION_PATH, ["-b", FINDER_BUNDLE_ID]),
-      {
-        requestDescription: "activating Finder",
-        beforeRequest: async () => {
-          try {
-            leagueCaptureOwner = await resolveLeagueOwner();
-          } catch (error) {
-            leagueOwnerResolutionError = error;
-          }
-        },
-      }
-    );
-  } catch (error) {
-    if (!(error instanceof DisplayCaptureReleaseTimeoutError)) {
-      throw error;
-    }
-    if (!leagueCaptureOwner) {
-      const verificationDetail =
-        leagueOwnerResolutionError instanceof Error
-          ? `: ${leagueOwnerResolutionError.message}`
-          : "";
-      throw new Error(
-        `${error.message}; League termination skipped because the captured display owner could not be verified${verificationDetail}`,
-        { cause: error }
-      );
-    }
-
-    try {
-      await releaseDisplayCapture(
-        async () =>
-          signalLeagueProcess(leagueCaptureOwner!, "SIGTERM"),
-        {
-          timeoutMs: LEAGUE_GAME_TERM_TIMEOUT_MS,
-          requestDescription:
-            "terminating the League of Legends game",
-        }
-      );
-    } catch (terminationError) {
-      if (
-        !(
-          terminationError instanceof DisplayCaptureReleaseTimeoutError
-        )
-      ) {
-        throw terminationError;
-      }
-
-      await releaseDisplayCapture(
-        async () =>
-          signalLeagueProcess(leagueCaptureOwner!, "SIGKILL"),
-        {
-          timeoutMs: LEAGUE_GAME_KILL_TIMEOUT_MS,
-          requestDescription:
-            "force-terminating the League of Legends game",
-        }
-      );
-    }
-  }
+  await terminateLeagueProcesses();
+  await releaseDisplayCapture(
+    () => runner(OPEN_APPLICATION_PATH, ["-b", FINDER_BUNDLE_ID]),
+    { requestDescription: "activating Finder" }
+  );
 
   nativeScreenLocker();
 }
