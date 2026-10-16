@@ -1,7 +1,8 @@
 import { execFileSync } from "node:child_process";
-import { mkdir, writeFile } from "node:fs/promises";
+import { mkdir, writeFile, readFile } from "node:fs/promises";
 import { resolve } from "node:path";
 import { build } from "esbuild";
+import { inventory } from "./media-manifest.mjs";
 
 function getArgument(name, fallback) {
   const index = process.argv.indexOf(name);
@@ -16,6 +17,14 @@ const bundlePath = resolve(distDirectory, "index.cjs");
 const configPath = resolve(distDirectory, "sea-config.json");
 
 await mkdir(distDirectory, { recursive: true });
+let mediaManifest = [];
+const assets = {};
+if (process.platform === "darwin") {
+  // Mandatory on macOS: a release cannot silently omit its media runtime.
+  mediaManifest = JSON.parse(await readFile(resolve("dist/media-manifest.json"), "utf8"));
+  if (JSON.stringify(await inventory(resolve("dist/media-runtime"))) !== JSON.stringify(mediaManifest)) throw new Error("Media build inventory changed");
+  for (const entry of mediaManifest) if (entry.type === "file") assets[`media/${entry.path}`] = resolve("dist/media-runtime", entry.path);
+}
 
 await build({
   entryPoints: [resolve("index.ts")],
@@ -28,6 +37,7 @@ await build({
   sourcemap: false,
   define: {
     VERSION: JSON.stringify(version),
+    MEDIA_MANIFEST: JSON.stringify(mediaManifest),
     "import.meta.main": "true",
   },
 });
@@ -41,6 +51,7 @@ const seaConfig = {
   useCodeCache: false,
   execArgv: ["--experimental-ffi", "--no-warnings"],
   execArgvExtension: "none",
+  assets,
 };
 
 if (executable) {

@@ -210,6 +210,13 @@ export class MqttDeviceFramework {
     );
   }
 
+  /** Feature-owned lifecycle/protocol, sharing the agent's single broker connection. */
+  public registerIntegration(integration: {
+    attach(client: mqtt.MqttClient, deviceId: string, device: DeviceConfig): void;
+  }): void {
+    integration.attach(this.client, this.deviceId, this.deviceConfig);
+  }
+
   public registerCommands(commands: MqttCommandDefinition[]): void {
     for (const command of commands) {
       if (!/^[a-z0-9_]+$/.test(command.id)) {

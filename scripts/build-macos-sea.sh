@@ -13,6 +13,8 @@ fi
 BUILD_DIR=$(mktemp -d)
 trap 'rm -rf "$BUILD_DIR"' EXIT
 
+bash scripts/prepare-media-runtime.sh
+
 curl -fsSL "https://nodejs.org/dist/v${NODE_VERSION}/SHASUMS256.txt" \
   --output "$BUILD_DIR/SHASUMS256.txt"
 

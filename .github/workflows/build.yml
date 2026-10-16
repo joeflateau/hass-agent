@@ -54,7 +54,9 @@ jobs:
           codesign --verify --strict --verbose=2 hass-agent-x64
 
       - name: Smoke test universal executable
-        run: ./hass-agent --help
+        run: |
+          ./hass-agent --help
+          ./hass-agent media-runtime-check
 
       - name: Upload build artifact
         uses: actions/upload-artifact@v4

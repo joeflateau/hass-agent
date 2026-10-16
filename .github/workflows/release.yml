@@ -76,6 +76,7 @@ jobs:
           echo ""
           echo "=== Runtime smoke test ==="
           ./hass-agent --help
+          ./hass-agent media-runtime-check
 
       - name: Prepare install script
         run: |
@@ -90,6 +91,9 @@ jobs:
           cp hass-agent-x64 release/
           cp README.md release/
           cp CHANGELOG.md release/
+          cp THIRD-PARTY-NOTICES.md release/
+          mkdir -p release/media
+          cp media/README.md release/media/
           cp .env.example release/
           cp com.homeassistant.agent.plist release/
           cp install.sh release/
@@ -102,14 +106,23 @@ jobs:
           # Create architecture-specific archives
           mkdir -p release-arm64 release-x64
           cp hass-agent-arm64 release-arm64/hass-agent
-          cp README.md CHANGELOG.md .env.example com.homeassistant.agent.plist install.sh release-arm64/
+          cp README.md CHANGELOG.md THIRD-PARTY-NOTICES.md .env.example com.homeassistant.agent.plist install.sh release-arm64/
+          mkdir -p release-arm64/media
+          cp media/README.md release-arm64/media/
           chmod +x release-arm64/hass-agent release-arm64/install.sh
           tar -czf hass-agent-${{ steps.version.outputs.VERSION }}-macos-arm64.tar.gz -C release-arm64 .
 
           cp hass-agent-x64 release-x64/hass-agent
-          cp README.md CHANGELOG.md .env.example com.homeassistant.agent.plist install.sh release-x64/
+          cp README.md CHANGELOG.md THIRD-PARTY-NOTICES.md .env.example com.homeassistant.agent.plist install.sh release-x64/
+          mkdir -p release-x64/media
+          cp media/README.md release-x64/media/
           chmod +x release-x64/hass-agent release-x64/install.sh
           tar -czf hass-agent-${{ steps.version.outputs.VERSION }}-macos-x64.tar.gz -C release-x64 .
+
+      - name: Verify copied release archives and embedded media runtime
+        env:
+          RELEASE_VERSION: ${{ steps.version.outputs.VERSION }}
+        run: bash scripts/verify-media-release.sh
 
       - name: Generate checksums
         run: |
