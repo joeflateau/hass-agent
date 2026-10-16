@@ -49,7 +49,9 @@ export class MqttMediaIntegration {
         command_topic: commandTopic, payload_press: action, qos: 0, retain: false,
         json_attributes_topic: stateTopic,
         // HA 2026.8.3 MqttCommandTemplate provides `this`; no entity-name assumptions.
-        command_template: "{{ {'action': value, 'request_id': (now().isoformat() ~ '-' ~ (range(0, 2147483647) | random)), 'session': this.attributes.get('session', ''), 'expected': this.attributes.get('version', ''), 'observed_at': this.attributes.get('observed_at', '')} | tojson }}",
+        // HA's sandbox rejects ranges larger than 100,000. Two bounded draws
+        // retain 32 bits of randomness without exceeding that limit.
+        command_template: "{{ {'action': value, 'request_id': (now().isoformat() ~ '-' ~ (range(0, 65536) | random) ~ '-' ~ (range(0, 65536) | random)), 'session': this.attributes.get('session', ''), 'expected': this.attributes.get('version', ''), 'observed_at': this.attributes.get('observed_at', '')} | tojson }}",
       });
     };
     const connect = () => {
