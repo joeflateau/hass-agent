@@ -11,6 +11,14 @@ const snapshot = (values = {}) => parseNowPlaying(JSON.stringify({ ...metadata, 
 const settle = async () => { for (let i = 0; i < 10; i++) await Promise.resolve(); };
 
 describe("genuine embedded artwork trust boundary", () => {
+  it("clears a previous process's retained image even when startup is idle", () => {
+    const read = vi.fn();
+    const publish = vi.fn();
+    const art = new ArtworkPublisher(read, publish);
+    expect(art.update(emptySnapshot("new-session", "idle"))).toBeNull();
+    expect(publish).toHaveBeenCalledExactlyOnceWith(null);
+    expect(read).not.toHaveBeenCalled();
+  });
   it("accepts bounded embedded PNG/JPEG only for metadata from the same source/track/session", () => {
     expect(parseArtwork(raw(), snapshot())).toEqual({ data: png, mime: "image/png", sha256: createHash("sha256").update(Buffer.from(png, "base64")).digest("hex") });
     for (const values of [{ title: "Other" }, { bundleIdentifier: "com.other" }, { processIdentifier: 99 }, { artworkMimeType: "image/svg+xml" }, { artworkMimeType: "image/jpeg" }, { artworkData: "https://private.invalid/art.jpg" }, { artworkData: "%%%=" }, { artworkData: "" }, { artworkData: Buffer.alloc(ARTWORK_MAX_BYTES + 1).toString("base64") }]) {
