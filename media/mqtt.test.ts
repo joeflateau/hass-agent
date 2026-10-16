@@ -69,7 +69,7 @@ describe("MQTT media integration (same broker, isolated protocol)", () => {
     await vi.waitFor(() => expect(backend.command).toHaveBeenCalledOnce());
     await vi.waitFor(() => expect(client.publish.mock.calls.some(c => c[0] === "hass-agent/mac-mini/media/result")).toBe(true));
     const receipt = client.publish.mock.calls.find(c => c[0] === "hass-agent/mac-mini/media/result")!;
-    expect(JSON.parse(receipt[1])).toMatchObject({ request_id: "frame_request_123456", action: "pause", status: "observed" });
+    expect(JSON.parse(receipt[1])).toMatchObject({ request_id: "frame_request_123456", action: "pause", status: "submitted" });
     expect(receipt[2]).toEqual({ qos: 0, retain: false });
   });
   it("opt-out retires only media discovery and retained media, without reading or subscribing to controls", () => {

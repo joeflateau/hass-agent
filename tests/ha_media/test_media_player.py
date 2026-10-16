@@ -191,85 +191,227 @@ async def test_reject_mismatched_registry_identity_and_topic_injection(env):
     assert list(discover(hass)) == ["mini"]
 
 
-async def test_receipt_before_publish_returns_correlation_no_optimism(env):
+async def test_service_returns_without_receipt_and_retains_transport_contract(env):
     p = player(env)
-    async def publish(_hass, topic, payload, **kwargs):
-        request = json.loads(payload)
-        assert topic == "hass-agent/mini/media/command"
-        assert kwargs == {"qos": 0, "retain": False}
-        assert len(request["request_id"]) == 32 and request["expected"] == "a" * 64
-        await receipt(env, request, status="submitted")
-    env[4].side_effect = publish
-    with pytest.raises(HomeAssistantError, match="not confirmed"):
-        await p.async_media_pause()
-    assert p.state == "playing"
-    assert p.extra_state_attributes["last_media_action"]["status"] == "submitted"
-
-
-@pytest.mark.parametrize("status", ["observed", "rejected", "unknown"])
-async def test_correlated_receipt_statuses(env, status):
-    p = player(env)
-    task = asyncio.create_task(p.async_media_pause())
-    await asyncio.sleep(0)
+    await asyncio.wait_for(p.async_media_pause(), 0.1)
     request = json.loads(env[4].call_args.args[2])
-    await receipt(env, {**request, "request_id": uuid4().hex})
-    assert not task.done()
-    with pytest.raises(HomeAssistantError, match="pending"):
-        await p.async_media_next_track()
-    await receipt(env, request, status=status, reason="Refresh playback")
-    if status == "observed":
-        await task
-    else:
-        with pytest.raises(HomeAssistantError):
-            await task
-    assert p.state == "playing"
+    assert env[4].call_args.args[1] == "hass-agent/mini/media/command"
+    assert env[4].call_args.kwargs == {"qos": 0, "retain": False}
+    assert len(request["request_id"]) == 32 and request["expected"] == "a" * 64
+    assert p.state == "paused" and p.assumed_state
+    assert env[0].states.get(p.entity_id).attributes["assumed_state"] is True
+    assert p._snapshot.state == "playing"
+    assert p.extra_state_attributes["last_media_action"] is None
+
+
+@pytest.mark.parametrize("status", ["observed", "submitted", "rejected", "unknown"])
+async def test_receipts_diagnostic_even_before_publish_returns(env, status):
+    p = player(env)
+    async def publish(_hass, _topic, payload, **kwargs):
+        await receipt(env, json.loads(payload), status=status, reason="Diagnostic")
+    env[4].side_effect = publish
+    await p.async_media_pause()
+    assert p.extra_state_attributes["last_media_action"]["status"] == status
+    assert p.assumed_state == (status not in ("rejected", "unknown"))
+    assert p.state == ("paused" if p.assumed_state else "playing")
+
+
+async def test_rapid_taps_late_receipt_and_no_invented_skip_metadata(env):
+    p = player(env)
+    await p.async_media_pause()
+    first = json.loads(env[4].call_args.args[2])
+    await p.async_media_play()
+    second = json.loads(env[4].call_args.args[2])
+    assert first["request_id"] != second["request_id"]
+    assert p.assumed_state and p.state == "playing"
+    await receipt(env, first, status="rejected")
+    assert p.assumed_state and p.extra_state_attributes["last_media_action"] is None
+    await receipt(env, {**second, "request_id": uuid4().hex})
+    assert p.assumed_state
+    await receipt(env, second, status="rejected")
+    assert not p.assumed_state
+    original = (p.media_title, p.media_position, p.media_image_hash)
+    await p.async_media_next_track()
+    await p.async_media_previous_track()
+    assert (p.media_title, p.media_position, p.media_image_hash) == original
+    assert not p.assumed_state and env[4].call_count == 4
+
+
+async def test_publish_failure_clears_optimism_and_does_not_retry(env):
+    p = player(env)
+    env[4].side_effect = HomeAssistantError("MQTT failed")
+    with pytest.raises(HomeAssistantError, match="MQTT failed"):
+        await p.async_media_pause()
+    assert p.state == "playing" and not p.assumed_state
+    assert p._request is None and p._optimism_cancel is None and not p._sending
     assert env[4].call_count == 1
 
 
-async def test_timeout_no_retry_and_new_session_fencing(env, monkeypatch):
-    monkeypatch.setattr(module, "RESULT_TIMEOUT_SECONDS", 0.01)
-    with pytest.raises(HomeAssistantError, match="may have happened"):
-        await player(env).async_media_next_track()
-    assert env[4].call_count == 1
-    assert player(env).extra_state_attributes["last_media_action"]["status"] == "unknown"
-    monkeypatch.setattr(module, "RESULT_TIMEOUT_SECONDS", 30)
-    task = asyncio.create_task(player(env).async_media_pause())
-    await asyncio.sleep(0)
-    await update(env, session=str(uuid4()))
-    with pytest.raises(HomeAssistantError, match="connection changed"):
-        await task
+async def test_new_intent_clears_previous_diagnostic_and_fences_old_expiry(env):
+    p = player(env)
+    await p.async_media_pause()
+    first = json.loads(env[4].call_args.args[2])
+    await receipt(env, first, status="rejected")
+    assert p.extra_state_attributes["last_media_action"]["status"] == "rejected"
+    await p.async_media_play()
+    assert p.assumed_state and p.state == "playing"
+    assert p.extra_state_attributes["last_media_action"] is None
+    p._expire_optimism(None, first["request_id"])
+    assert p.assumed_state and p.state == "playing"
     assert env[4].call_count == 2
 
 
-async def test_unload_and_disconnect_block_and_cancel_commands(env, monkeypatch):
-    monkeypatch.setattr(module.mqtt, "is_connected", lambda _: False)
-    with pytest.raises(HomeAssistantError, match="disconnected"):
-        await player(env).async_media_pause()
-    env[4].assert_not_called()
-    monkeypatch.setattr(module.mqtt, "is_connected", lambda _: True)
+async def test_only_actual_publish_is_single_flight_no_queue(env):
     p = player(env)
+    started, release = asyncio.Event(), asyncio.Event()
+    async def publish(*args, **kwargs):
+        started.set()
+        await release.wait()
+    env[4].side_effect = publish
+    first = asyncio.create_task(p.async_media_pause())
+    await started.wait()
+    with pytest.raises(HomeAssistantError, match="being sent"):
+        await p.async_media_play()
+    assert p.state == "paused" and env[4].call_count == 1
+    release.set()
+    await first
+    await p.async_media_play()
+    assert p.state == "playing" and env[4].call_count == 2
+
+
+async def test_cancelled_publication_clears_assumption_and_send_slot(env):
+    p = player(env)
+    started = asyncio.Event()
+    async def publish(*args, **kwargs):
+        started.set()
+        await asyncio.Event().wait()
+    env[4].side_effect = publish
     task = asyncio.create_task(p.async_media_pause())
-    await asyncio.sleep(0)
+    await started.wait()
+    task.cancel()
+    with pytest.raises(asyncio.CancelledError):
+        await task
+    assert not p.assumed_state and p._request is None and not p._sending
+    assert env[4].call_count == 1
+
+
+@pytest.mark.parametrize("transition", ["observation", "disconnect", "unload"])
+async def test_lifecycle_during_publication_does_not_restore_assumption(env, transition):
+    p = player(env)
+    started, release = asyncio.Event(), asyncio.Event()
+    async def publish(*args, **kwargs):
+        started.set()
+        await release.wait()
+    env[4].side_effect = publish
+    task = asyncio.create_task(p.async_media_pause())
+    await started.wait()
+    assert p.assumed_state
+    if transition == "observation":
+        await update(env, "playing")
+    elif transition == "disconnect":
+        p._connection_changed(False)
+    else:
+        p._cleanup()
+    release.set()
+    await task
+    assert not p.assumed_state and p._optimism_cancel is None
+    assert env[4].call_count == 1 and not p._sending
+
+
+async def test_new_observation_corrects_optimism_not_duplicate_state(env):
+    p = player(env)
+    await p.async_media_pause()
+    old = dict(env[0].states.get(p.source_info.entity_id).attributes)
+    env[0].states.async_set(p.source_info.entity_id, "playing", {**old, "unrelated": True})
+    await env[0].async_block_till_done()
+    assert p.state == "paused" and p.assumed_state
+    await update(env, "playing")
+    assert p.state == "playing" and not p.assumed_state
+    assert p._optimism_cancel is None
+
+
+@pytest.mark.parametrize("transition", ["session", "version", "source", "idle", "unavailable", "stale", "rename"])
+async def test_context_transition_clears_intent_and_fences_receipts(env, transition):
+    p = player(env)
+    await p.async_media_pause()
+    request = json.loads(env[4].call_args.args[2])
+    if transition == "rename":
+        from dataclasses import replace
+        p.async_update_source(replace(p.source_info, entity_id="sensor.renamed"))
+    elif transition in ("idle", "unavailable"):
+        await update(env, transition)
+    else:
+        changes = {
+            "session": {"session": str(uuid4())},
+            "version": {"version": "b" * 64},
+            "source": {"source": "com.spotify.client"},
+            "stale": {"observed_at": (dt_util.utcnow() - timedelta(seconds=16)).isoformat()},
+        }
+        await update(env, **changes[transition])
+    assert not p.assumed_state and p._optimism_cancel is None and p._request is None
+    await receipt(env, request, status="submitted")
+    assert p.extra_state_attributes["last_media_action"] is None
+
+
+async def test_optimism_expiry_returns_to_observed_without_retry(env, monkeypatch):
+    monkeypatch.setattr(module, "OPTIMISM_SECONDS", 0.01)
+    p = player(env)
+    await p.async_media_pause()
+    assert p.state == "paused"
+    await asyncio.sleep(0.02)
+    assert p.state == "playing" and not p.assumed_state
+    assert env[4].call_count == 1 and p._optimism_cancel is None
+
+
+async def test_optimistic_timeline_freezes_and_resumes_at_tap(env, monkeypatch):
+    now = dt_util.utcnow()
+    await update(env, position=12, position_at=(now - timedelta(seconds=4)).isoformat(), observed_at=now.isoformat())
+    p = player(env)
+    monkeypatch.setattr(module.dt_util, "utcnow", lambda: now)
+    await p.async_media_pause()
+    assert p.media_position == 16 and p.media_position_updated_at == now
+    later = now + timedelta(seconds=2)
+    monkeypatch.setattr(module.dt_util, "utcnow", lambda: later)
+    await p.async_media_play()
+    assert p.media_position == 16 and p.media_position_updated_at == later
+    assert p._snapshot.attributes["position"] == 12
+    await update(env, "paused", rate=2, position=20, position_at=None, observed_at=later.isoformat())
+    await p.async_media_play()
+    assert p.media_position == 20 and p.media_position_updated_at is None
+
+
+async def test_unload_and_disconnect_clear_intent_and_block_commands(env, monkeypatch):
+    p = player(env)
+    await p.async_media_pause()
+    monkeypatch.setattr(module.mqtt, "is_connected", lambda _: False)
+    p._connection_changed(False)
+    assert not p.assumed_state and p._request is None and p._optimism_cancel is None
+    with pytest.raises(HomeAssistantError, match="disconnected"):
+        await p.async_media_play()
+    monkeypatch.setattr(module.mqtt, "is_connected", lambda _: True)
+    p._connection_changed(True)
+    await update(env)
+    await p.async_media_pause()
     p._cleanup()
     with pytest.raises(HomeAssistantError, match="unloaded"):
-        await task
-    assert p._expiry_cancel is None and not p._unsubscribers
+        await p.async_media_play()
+    assert p._expiry_cancel is None and not p._unsubscribers and p._optimism_cancel is None
 
 
-async def test_connection_epoch_requires_new_observation_and_fences_pending(env):
+async def test_connection_epoch_requires_new_observation_and_fences_receipt(env):
     p = player(env)
     old = dict(env[0].states.get(p.source_info.entity_id).attributes)
-    task = asyncio.create_task(p.async_media_pause())
-    await asyncio.sleep(0)
+    await p.async_media_pause()
+    request = json.loads(env[4].call_args.args[2])
     p._connection_changed(False)
-    with pytest.raises(HomeAssistantError, match="MQTT connection changed"):
-        await task
     p._connection_changed(True)
     p._refresh()
-    assert not p.available
+    assert not p.available and not p.assumed_state
     env[0].states.async_set(p.source_info.entity_id, "playing", old)
     await env[0].async_block_till_done()
     assert not p.available
+    await receipt(env, request)
+    assert p.extra_state_attributes["last_media_action"] is None
     await update(env)
     assert p.available
 

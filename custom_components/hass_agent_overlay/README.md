@@ -65,18 +65,28 @@ dashboards, but disabling the source/result sensors disables their companion.
 
 Each action publishes a UUID-correlated, non-retained QoS-0 request to the fixed
 `hass-agent/DEVICE_ID/media/command` topic using a fresh source session, version
-and observation. Only one action per player can be pending. There is no queue,
-automatic retry, or optimistic playback state. The integration waits at most
-30 seconds for a matching result, cancelling pending work on an epoch change or
-unload.
+and observation. The service returns as soon as local MQTT publication completes;
+it does not wait for a receipt or report missing confirmation as an error.
+Only the short publication itself is single-flight. Subsequent deliberate taps
+do not wait for receipts. There is no queue, automatic retry, or action replay.
+A local publication failure still raises immediately.
 
-`last_media_action` contains the correlated receipt. `observed` means the agent
-observed the requested state/change, not guaranteed causation. `submitted` means
-only that the native helper returned; the service reports **sent but unconfirmed**
-without changing the player state. `rejected` reports the Mac's reason. `unknown` or a missing receipt
-raises a clear error: the action may have happened, so check playback before
-trying again, especially for a skip. A later unrelated track change never
-converts a missing receipt into success.
+Play/pause immediately show temporary **assumed state**, including a re-anchored
+normal-rate timeline when available. This is UI feedback, not an observed Mac
+state. Next/previous never invent a track title, artwork or progress reset.
+Any genuinely newer source observation corrects the assumption, even when it
+disagrees; track/source/session changes, stale/idle/unavailable state, disconnect,
+unload, or five seconds without an update clear it. The underlying MQTT snapshot
+and its freshness are never changed by an action.
+
+`last_media_action` remains a diagnostic receipt for the latest request only.
+`observed` means the agent observed a matching state/change, not guaranteed
+causation. `submitted` means only that the native helper returned. A latest
+`rejected` or `unknown` receipt clears the temporary assumption without
+retroactively failing the completed service. Late receipts from superseded
+requests or a previous connection/session cannot overwrite newer intent.
+Normal MQTT state subscriptions remain authoritative; the Overlay does not poll
+for command confirmation. Check actual playback before a deliberate retry.
 
 The backward-compatible metadata/control contract and additive artwork topic are documented in [Mac Now Playing](../../media/README.md).
 Only MQTT sensor IDs `DEVICE_ID_now_playing` and `DEVICE_ID_media_last_action`

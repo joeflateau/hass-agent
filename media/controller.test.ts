@@ -53,7 +53,7 @@ describe("Now Playing trust boundary", () => {
   });
 });
 describe("media action lifecycle", () => {
-  it("allows pause through volatile native IDs and confirms the unchanged track paused", async () => {
+  it("allows pause through volatile native IDs without confirmation polling", async () => {
     const { backend, controller, request } = setup();
     const ids = ["93F5FB2B-2F56-4489-ACA2-8623209BF41E", "43CF6505-917B-4237-8615-A2A53EA45A48", "2A30B4F0-90D1-4E52-9D4B-2FE53224F6A8"];
     vi.mocked(backend.read)
@@ -62,23 +62,19 @@ describe("media action lifecycle", () => {
       .mockResolvedValueOnce(JSON.stringify({ ...chrome, contentItemIdentifier: ids[2], playing: false }));
     await controller.poll();
     const result = await controller.dispatch(request("pause"));
-    expect(result?.status).toBe("observed");
+    expect(result?.status).toBe("submitted");
     expect(backend.command).toHaveBeenCalledExactlyOnceWith("pause", expect.any(AbortSignal));
-    expect(controller.snapshot.state).toBe("paused");
+    expect(controller.snapshot.state).toBe("playing");
   });
-  it("waits for delayed playback metadata without resending the command", async () => {
-    vi.useFakeTimers();
-    try {
-      const { backend, controller, request } = setup();
-      await controller.poll();
-      vi.mocked(backend.read).mockResolvedValueOnce(JSON.stringify(chrome))
-        .mockResolvedValueOnce(JSON.stringify(chrome))
-        .mockResolvedValue(JSON.stringify({ ...chrome, playing: false }));
-      const pending = controller.dispatch(request("pause"));
-      await vi.advanceTimersByTimeAsync(251);
-      expect((await pending)?.status).toBe("observed");
-      expect(backend.command).toHaveBeenCalledExactlyOnceWith("pause", expect.any(AbortSignal));
-    } finally { vi.useRealTimers(); }
+  it("releases the action slot after submission without confirmation polling", async () => {
+    const { backend, controller, request } = setup();
+    await controller.poll();
+    const count = controller.snapshot.observed_at;
+    expect((await controller.dispatch(request("pause")))?.status).toBe("submitted");
+    expect((await controller.dispatch(request("play", "second_request_123456")))?.status).toBe("submitted");
+    expect(backend.command).toHaveBeenCalledTimes(2);
+    expect(backend.read).toHaveBeenCalledTimes(3);
+    expect(controller.snapshot.observed_at).toBe(count);
   });
   it("joins a background poll but rejects a concurrent action and revalidates afterwards", async () => {
     const { backend, controller, request } = setup();
@@ -96,7 +92,7 @@ describe("media action lifecycle", () => {
     expect((await action)?.reason).toContain("Now Playing changed");
     expect(backend.command).not.toHaveBeenCalled();
   });
-  it("bounds unconfirmed observations and releases the slot without retrying playback", async () => {
+  it("deduplicates submitted actions without retrying playback", async () => {
     vi.useFakeTimers();
     try {
       const { backend, controller, request } = setup();
@@ -108,22 +104,20 @@ describe("media action lifecycle", () => {
       expect((await controller.dispatch(body))?.status).toBe("submitted");
       expect(backend.command).toHaveBeenCalledOnce();
       vi.mocked(backend.read).mockResolvedValue(JSON.stringify({ ...chrome, playing: false }));
-      expect((await controller.dispatch(request("pause", "new_request_123456")))?.status).toBe("observed");
+      expect((await controller.dispatch(request("pause", "new_request_123456")))?.status).toBe("submitted");
     } finally { vi.useRealTimers(); }
   });
-  it("fences a command's delayed confirmation after an epoch reset", async () => {
+  it("fences a native command completing after an epoch reset", async () => {
     const { backend, controller, request, snapshots } = setup();
     await controller.poll();
-    const body = request("pause");
-    let resolve!: (value: string) => void;
-    vi.mocked(backend.read).mockResolvedValueOnce(JSON.stringify(chrome))
-      .mockImplementationOnce(() => new Promise(r => { resolve = r; }));
-    const pending = controller.dispatch(body);
-    for (let i = 0; i < 10 && !resolve; i++) await Promise.resolve();
-    expect(resolve).toBeTypeOf("function");
+    let release!: () => void;
+    vi.mocked(backend.command).mockImplementationOnce(() => new Promise(r => { release = r; }));
+    const pending = controller.dispatch(request("pause"));
+    for (let i = 0; i < 10 && !release; i++) await Promise.resolve();
+    expect(release).toBeTypeOf("function");
     controller.resetSession();
     const count = snapshots.length;
-    resolve(JSON.stringify({ ...chrome, playing: false }));
+    release();
     expect((await pending)?.status).toBe("unknown");
     expect(snapshots).toHaveLength(count);
     expect(controller.snapshot.state).toBe("unavailable");
@@ -141,11 +135,11 @@ describe("media action lifecycle", () => {
     expect(await controller.dispatch(body)).toBeUndefined();
     release();
     const result = await pending;
-    expect(result?.status).toBe("observed");
+    expect(result?.status).toBe("submitted");
     expect(await controller.dispatch(body)).toEqual(result);
     expect(backend.command).toHaveBeenCalledOnce();
   });
-  it("does not confirm a skip when the source process changes", async () => {
+  it("does not use later source metadata to invent a skip receipt", async () => {
     const { backend, controller, request } = setup();
     await controller.poll();
     vi.mocked(backend.read).mockResolvedValueOnce(JSON.stringify(chrome))
@@ -188,13 +182,13 @@ describe("media action lifecycle", () => {
       await Promise.resolve(); vi.useRealTimers();
     }
   });
-  it("observes skip only after changed track, consumes duplicate request once", async () => {
+  it("submits a skip once and deduplicates its receipt", async () => {
     const { backend, controller, request } = setup();
     await controller.poll();
     const body = request();
     vi.mocked(backend.read).mockResolvedValueOnce(JSON.stringify(chrome)).mockResolvedValue(JSON.stringify({ ...chrome, title: "next track" }));
     const result = await controller.dispatch(body);
-    expect(result?.status).toBe("observed");
+    expect(result?.status).toBe("submitted");
     expect(await controller.dispatch(body)).toEqual(result);
     expect(backend.command).toHaveBeenCalledExactlyOnceWith("next", expect.any(AbortSignal));
   });
@@ -208,66 +202,14 @@ describe("media action lifecycle", () => {
     vi.useRealTimers();
     expect(backend.command).toHaveBeenCalledOnce();
   });
-  it("confirms Previous restarting the same track from a fresh position reset", async () => {
-    vi.useFakeTimers();
-    try {
-      const { backend, controller, request, time } = setup();
-      await controller.poll();
-      vi.mocked(backend.command).mockImplementation(async () => {
-        time(now + 1000);
-        vi.mocked(backend.read).mockResolvedValue(JSON.stringify({ ...chrome,
-          elapsedTime: 0.4, timestamp: new Date(now + 500).toISOString() }));
-      });
-      const body = request("previous");
-      const pending = controller.dispatch(body);
-      await vi.advanceTimersByTimeAsync(6100);
-      const result = await pending;
-      expect(result?.status).toBe("observed");
-      expect(await controller.dispatch(body)).toEqual(result);
-      expect(controller.snapshot.position).toBe(0.4);
-      expect(backend.command).toHaveBeenCalledExactlyOnceWith("previous", expect.any(AbortSignal));
-    } finally { vi.useRealTimers(); }
-  });
-  it.each<{ name: string; before?: Record<string, unknown>; after?: Record<string, unknown>; action?: string; status?: string }>([
-    { name: "Previous changing tracks", after: { title: "previous track" }, status: "observed" },
-    { name: "paused restart", before: { playing: false, playbackRate: 0 }, after: { playing: false, playbackRate: 0 }, status: "observed" },
-    { name: "older valid position anchor", before: { elapsedTime: 30, timestamp: new Date(now - 60000).toISOString() }, status: "observed" },
-    { name: "rewind inferred only from an old zero anchor", before: { elapsedTime: 0, timestamp: new Date(now - 60000).toISOString() } },
-    { name: "ordinary forward progress", after: { elapsedTime: chrome.elapsedTime + 1.5 } },
-    { name: "unchanged source timestamp", after: { timestamp: chrome.timestamp } },
-    { name: "older source timestamp", after: { timestamp: new Date(now - 2000).toISOString() } },
-    { name: "source timestamp preceding command", after: { timestamp: new Date(now - 500).toISOString() } },
-    { name: "future source timestamp", after: { timestamp: new Date(now + 1500).toISOString() } },
-    { name: "missing source timestamp", after: { timestamp: null } },
-    { name: "missing baseline timestamp", before: { timestamp: null } },
-    { name: "future baseline timestamp", before: { timestamp: new Date(now + 500).toISOString() } },
-    { name: "missing position", after: { elapsedTime: null } },
-    { name: "near-start no-op or jitter", before: { elapsedTime: 0.8 } },
-    { name: "small backward correction", before: { elapsedTime: 2 }, after: { elapsedTime: 1 } },
-    { name: "seek away from start", after: { elapsedTime: 50 } },
-    { name: "possible natural loop", before: { elapsedTime: chrome.duration - 1 } },
-    { name: "unknown duration", before: { duration: null }, after: { duration: null } },
-    { name: "changed duration", after: { duration: 100 } },
-    { name: "unknown baseline rate", before: { playbackRate: null } },
-    { name: "unsupported playback rate", after: { playbackRate: 2 } },
-    { name: "source process switch", after: { processIdentifier: 456 } },
-    { name: "Next with same-track restart", action: "next" },
-  ])("handles restart evidence conservatively: $name", async ({ before, after, action = "previous", status = "submitted" }) => {
-    vi.useFakeTimers();
-    try {
-      const { backend, controller, request, time } = setup();
-      vi.mocked(backend.read).mockResolvedValue(JSON.stringify({ ...chrome, ...before }));
-      await controller.poll();
-      vi.mocked(backend.command).mockImplementation(async () => {
-        time(now + 1000);
-        vi.mocked(backend.read).mockResolvedValue(JSON.stringify({ ...chrome,
-          elapsedTime: 0.4, timestamp: new Date(now + 500).toISOString(), ...after }));
-      });
-      const pending = controller.dispatch(request(action));
-      await vi.advanceTimersByTimeAsync(6100);
-      expect((await pending)?.status).toBe(status);
-      expect(backend.command).toHaveBeenCalledExactlyOnceWith(action, expect.any(AbortSignal));
-    } finally { vi.useRealTimers(); }
+  it.each(["play", "pause", "previous", "next"])("submits %s without waiting for a confirming read", async action => {
+    const { backend, controller, request } = setup();
+    await controller.poll();
+    const result = await controller.dispatch(request(action));
+    expect(result?.status).toBe("submitted");
+    expect(backend.read).toHaveBeenCalledTimes(2); // bootstrap + safety preflight only
+    expect(backend.command).toHaveBeenCalledExactlyOnceWith(action, expect.any(AbortSignal));
+    expect(controller.snapshot.state).toBe("playing"); // normal telemetry remains authoritative
   });
   it("does not call a same-metadata skip observed just because the native content ID changed", async () => {
     const { backend, controller, request } = setup();
@@ -306,7 +248,7 @@ describe("media action lifecycle", () => {
     expect((await controller.dispatch(body))?.status).toBe("rejected");
     expect(backend.command).not.toHaveBeenCalled();
   });
-  it("revalidates track immediately before sending; paused observation confirms pause", async () => {
+  it("revalidates track immediately before sending, without a post-action read", async () => {
     const { backend, controller, request } = setup();
     await controller.poll();
     const body = request();
@@ -315,7 +257,7 @@ describe("media action lifecycle", () => {
     expect(backend.command).not.toHaveBeenCalled();
     const pause = request("pause", "request_2234567890");
     vi.mocked(backend.command).mockImplementation(async () => { vi.mocked(backend.read).mockResolvedValue(JSON.stringify({ ...chrome, title: "other", playing: false })); });
-    expect((await controller.dispatch(pause))?.status).toBe("observed");
+    expect((await controller.dispatch(pause))?.status).toBe("submitted");
   });
   it("does not queue actions or overlap polls; shutdown cancels and fences late reads", async () => {
     const { backend, controller, request, snapshots } = setup();
@@ -338,5 +280,136 @@ describe("media action lifecycle", () => {
     controller.resetSession(); // MQTT close after shutdown must not revive the reader.
     await controller.poll();
     expect(backend.read).toHaveBeenCalledTimes(2);
+  });
+});
+
+describe("Now Playing notification subscription", () => {
+  function streaming() {
+    const lane = setup();
+    const streams: { signal: AbortSignal; emit: (raw: string) => void; fail: (error: Error) => void }[] = [];
+    lane.backend.verifySession = vi.fn(async () => {});
+    lane.backend.subscribe = vi.fn((signal, emit) => new Promise<void>((resolve, reject) => {
+      streams.push({ signal, emit, fail: reject });
+      signal.addEventListener("abort", () => resolve(), { once: true });
+    }));
+    return { ...lane, streams };
+  }
+  it("pushes changes immediately without a poll or playback command", async () => {
+    vi.useFakeTimers();
+    const { controller, backend, streams, time } = streaming();
+    try {
+      controller.start();
+      await vi.advanceTimersByTimeAsync(1);
+      time(now + 1000);
+      streams[0]!.emit(JSON.stringify({ ...chrome, playing: false, elapsedTime: 129 }));
+      expect(controller.snapshot).toMatchObject({ state: "paused", position: 129, position_at: chrome.timestamp });
+      expect(backend.read).toHaveBeenCalledOnce();
+      expect(backend.command).not.toHaveBeenCalled();
+    } finally { controller.stop(); await vi.advanceTimersByTimeAsync(1); vi.useRealTimers(); }
+  });
+  it("keeps silence healthy but renews its lease only with a real ten-second probe", async () => {
+    vi.useFakeTimers();
+    const { controller, backend, time } = streaming();
+    try {
+      controller.start(); await vi.advanceTimersByTimeAsync(1);
+      const original = controller.snapshot.observed_at;
+      time(now + 9000); await vi.advanceTimersByTimeAsync(8999);
+      expect(controller.snapshot.observed_at).toBe(original);
+      expect(backend.read).toHaveBeenCalledOnce();
+      time(now + 10000); await vi.advanceTimersByTimeAsync(1000);
+      expect(backend.read).toHaveBeenCalledTimes(2);
+      expect(controller.snapshot.observed_at).not.toBe(original);
+      expect(controller.snapshot.position_at).toBe(chrome.timestamp);
+    } finally { controller.stop(); await vi.advanceTimersByTimeAsync(1); vi.useRealTimers(); }
+  });
+  it("does not let a slow older probe overwrite a pushed event", async () => {
+    vi.useFakeTimers();
+    const { controller, backend, streams } = streaming();
+    let release!: (raw: string) => void;
+    try {
+      vi.mocked(backend.read).mockImplementationOnce(() => new Promise(r => { release = r; }));
+      controller.start(); await vi.advanceTimersByTimeAsync(1);
+      streams[0]!.emit(JSON.stringify({ ...chrome, title: "new pushed track" }));
+      release(JSON.stringify(chrome));
+      await vi.advanceTimersByTimeAsync(1);
+      expect(controller.snapshot.title).toBe("new pushed track");
+    } finally { controller.stop(); await vi.advanceTimersByTimeAsync(1); vi.useRealTimers(); }
+  });
+  it("fences reconnect and shutdown events and never replays playback", async () => {
+    vi.useFakeTimers();
+    const { controller, backend, streams } = streaming();
+    try {
+      controller.start(); await vi.advanceTimersByTimeAsync(1);
+      const first = streams[0]!;
+      controller.resetSession(); await vi.advanceTimersByTimeAsync(1);
+      expect(first.signal.aborted).toBe(true);
+      first.emit(JSON.stringify({ ...chrome, title: "old connection" }));
+      expect(controller.snapshot.title).not.toBe("old connection");
+      expect(streams).toHaveLength(2);
+      streams[1]!.emit("null");
+      expect(controller.snapshot.state).toBe("idle");
+      controller.stop();
+      streams[1]!.emit(JSON.stringify(chrome));
+      expect(controller.snapshot.state).toBe("unavailable");
+      await vi.advanceTimersByTimeAsync(20000);
+      expect(streams).toHaveLength(2);
+      expect(backend.command).not.toHaveBeenCalled();
+    } finally { controller.stop(); await vi.advanceTimersByTimeAsync(1); vi.useRealTimers(); }
+  });
+  it("rejects a preflight overtaken by a pushed track change without publishing the old track", async () => {
+    vi.useFakeTimers();
+    const { controller, backend, streams, request } = streaming();
+    try {
+      controller.start(); await vi.advanceTimersByTimeAsync(1);
+      let release!: (raw: string) => void;
+      vi.mocked(backend.read).mockImplementationOnce(() => new Promise(r => { release = r; }));
+      const pending = controller.dispatch(request("previous"));
+      await vi.advanceTimersByTimeAsync(1);
+      streams[0]!.emit(JSON.stringify({ ...chrome, title: "new pushed track" }));
+      release(JSON.stringify(chrome));
+      expect((await pending)?.status).toBe("rejected");
+      expect(controller.snapshot.title).toBe("new pushed track");
+      expect(backend.command).not.toHaveBeenCalled();
+    } finally { controller.stop(); await vi.advanceTimersByTimeAsync(1); vi.useRealTimers(); }
+  });
+  it("bounds stream recovery without replaying actions", async () => {
+    vi.useFakeTimers();
+    const { controller, backend, streams } = streaming();
+    try {
+      controller.start(); await vi.advanceTimersByTimeAsync(1);
+      streams[0]!.fail(new Error("helper exited"));
+      await vi.advanceTimersByTimeAsync(1);
+      expect(controller.snapshot.state).toBe("unavailable");
+      await vi.advanceTimersByTimeAsync(4999);
+      expect(streams).toHaveLength(2);
+      expect(backend.command).not.toHaveBeenCalled();
+    } finally { controller.stop(); await vi.advanceTimersByTimeAsync(1); vi.useRealTimers(); }
+  });
+  it("checks active-login eligibility even under continuous events and fences loss", async () => {
+    vi.useFakeTimers();
+    const { controller, backend, streams, time } = streaming();
+    try {
+      controller.start(); await vi.advanceTimersByTimeAsync(1);
+      for (let second = 1; second <= 9; second++) {
+        time(now + second * 1000);
+        streams[0]!.emit(JSON.stringify(chrome));
+        await vi.advanceTimersByTimeAsync(1000);
+      }
+      expect(backend.read).toHaveBeenCalledOnce();
+      vi.mocked(backend.verifySession!).mockRejectedValue(new Error("different console user"));
+      vi.mocked(backend.read).mockRejectedValue(new Error("wrong login"));
+      time(now + 10000); await vi.advanceTimersByTimeAsync(1000);
+      expect(backend.verifySession).toHaveBeenCalledTimes(2);
+      expect(streams[0]!.signal.aborted).toBe(true);
+      streams[0]!.emit(JSON.stringify(chrome));
+      expect(controller.snapshot.state).toBe("unavailable");
+      await vi.advanceTimersByTimeAsync(5000);
+      expect(streams).toHaveLength(1); // restart admission failed eligibility
+      vi.mocked(backend.verifySession!).mockResolvedValue();
+      await vi.advanceTimersByTimeAsync(5000);
+      expect(streams).toHaveLength(2);
+      streams[1]!.emit(JSON.stringify(chrome));
+      expect(controller.snapshot.state).toBe("playing");
+    } finally { controller.stop(); await vi.advanceTimersByTimeAsync(1); vi.useRealTimers(); }
   });
 });
