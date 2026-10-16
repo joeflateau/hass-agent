@@ -1,11 +1,13 @@
 import { randomUUID } from "node:crypto";
 import { setTimeout as delay } from "node:timers/promises";
 import { ACTIONS, emptySnapshot, parseNowPlaying, requestSchema, type MediaSnapshot, type MediaResult } from "./model.ts";
+import { ARTWORK_MAX_RESPONSE } from "./artwork.ts";
 import { runBounded } from "./process.ts";
 import { prepareRuntime, verifyGuiLogin } from "./runtime.ts";
 
 export interface MediaBackend {
   read(signal: AbortSignal): Promise<string>;
+  readArtwork?(signal: AbortSignal): Promise<string>;
   command(action: keyof typeof ACTIONS, signal: AbortSignal): Promise<void>;
 }
 export function nativeMediaBackend(): MediaBackend {
@@ -18,6 +20,7 @@ export function nativeMediaBackend(): MediaBackend {
   }
   return {
     read: async signal => runBounded(await executable(signal), ["get", "--no-artwork"], signal),
+    readArtwork: async signal => runBounded(await executable(signal), ["get"], signal, ARTWORK_MAX_RESPONSE),
     command: async (action, signal) => { await runBounded(await executable(signal), [ACTIONS[action]], signal); },
   };
 }

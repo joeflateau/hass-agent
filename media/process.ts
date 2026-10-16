@@ -1,7 +1,7 @@
 import { spawn } from "node:child_process";
 
 /** No shell, no stdin, a hard output ceiling and kill deadline (also on stop). */
-export function runBounded(executable: string, args: readonly string[], signal?: AbortSignal): Promise<string> {
+export function runBounded(executable: string, args: readonly string[], signal?: AbortSignal, maxBytes = 65536): Promise<string> {
   return new Promise((resolve, reject) => {
     if (signal?.aborted) return reject(new Error("Media operation stopped"));
     const child = spawn(executable, [...args], { stdio: ["ignore", "pipe", "ignore"] });
@@ -17,7 +17,7 @@ export function runBounded(executable: string, args: readonly string[], signal?:
     signal?.addEventListener("abort", abort, { once: true });
     child.stdout.on("data", (chunk: Buffer) => {
       bytes += chunk.length;
-      if (bytes > 65536) kill("Media response exceeded 64 KiB");
+      if (bytes > maxBytes) kill(maxBytes === 65536 ? "Media response exceeded 64 KiB" : "Media response exceeded artwork limit");
       else chunks.push(chunk);
     });
     const cleanup = () => { clearTimeout(timer); signal?.removeEventListener("abort", abort); };

@@ -1,3 +1,4 @@
+import { ArtworkPublisher } from "./artwork.ts";
 import type { MqttClient } from "mqtt";
 import type { DeviceConfig } from "../mqtt-emitter.ts";
 import { MediaController, nativeMediaBackend, type MediaBackend } from "./controller.ts";
@@ -5,6 +6,7 @@ import { ACTIONS, type MediaSnapshot } from "./model.ts";
 
 export class MqttMediaIntegration {
   private controller?: MediaController;
+  private artwork?: ArtworkPublisher;
   constructor(private backend: MediaBackend = nativeMediaBackend(), private enabled = true) {}
   attach(client: MqttClient, deviceId: string, device: DeviceConfig): void {
     if (!this.enabled) {
@@ -13,6 +15,7 @@ export class MqttMediaIntegration {
           client.publish(`homeassistant/${type}/${deviceId}/${id}/config`, "", { qos: 1, retain: true });
         }
         client.publish(`hass-agent/${deviceId}/media/state`, "", { qos: 1, retain: true });
+        client.publish(`hass-agent/${deviceId}/media/artwork`, "", { qos: 1, retain: true });
       };
       client.on("connect", retire);
       if (client.connected) retire();
@@ -22,8 +25,12 @@ export class MqttMediaIntegration {
     const stateTopic = `${root}/state`;
     const commandTopic = `${root}/command`;
     const resultTopic = `${root}/result`;
+    const artwork = this.artwork = new ArtworkPublisher(this.backend.readArtwork?.bind(this.backend), art => {
+      if (client.connected) client.publish(`${root}/artwork`, art ? JSON.stringify(art) : "", { qos: 1, retain: true });
+    });
     const publishState = (state: MediaSnapshot) => {
-      if (client.connected) client.publish(stateTopic, JSON.stringify(state), { qos: 0, retain: true });
+      const artwork_key = artwork.update(state);
+      if (client.connected) client.publish(stateTopic, JSON.stringify({ ...state, artwork_key }), { qos: 0, retain: true });
     };
     const controller = this.controller = new MediaController(this.backend, publishState);
     const availability = (controls = false) => [
@@ -74,5 +81,5 @@ export class MqttMediaIntegration {
     if (client.connected) connect();
   }
   start(): void { this.controller?.start(); }
-  stop(): void { this.controller?.stop(); }
+  stop(): void { this.controller?.stop(); this.artwork?.stop(); }
 }

@@ -8,6 +8,10 @@ describe("bounded native helper process", () => {
     await expect(runBounded(process.execPath, ["-e", "process.exit(1)"])).rejects.toThrow();
     await expect(runBounded("/not/a/helper", [])).rejects.toThrow();
   });
+  it("keeps the artwork ceiling separate from normal metadata", async () => {
+    await expect(runBounded(process.execPath, ["-e", "process.stdout.write('a'.repeat(70000))"], undefined, 1048576)).resolves.toHaveLength(70000);
+    await expect(runBounded(process.execPath, ["-e", "process.stdout.write('a'.repeat(1048577))"], undefined, 1048576)).rejects.toThrow("artwork limit");
+  });
   it("kills a hung process on its deadline", async () => {
     await expect(runBounded(process.execPath, ["-e", "setInterval(()=>{},1000)"])).rejects.toThrow("timed out");
   }, 6000);

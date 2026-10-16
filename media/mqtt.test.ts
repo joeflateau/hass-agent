@@ -4,9 +4,9 @@ import type { MqttClient } from "mqtt";
 import { MqttMediaIntegration } from "./mqtt.ts";
 import type { MediaBackend } from "./controller.ts";
 
-function setup(enabled = true) {
+function setup(enabled = true, readArtwork?: MediaBackend["readArtwork"]) {
   const client = Object.assign(new EventEmitter(), { connected: true, publish: vi.fn(), subscribe: vi.fn() });
-  const backend: MediaBackend = { read: vi.fn(async () => JSON.stringify({ title: "Chrome video", playing: true })), command: vi.fn(async () => {}) };
+  const backend: MediaBackend = { readArtwork, read: vi.fn(async () => JSON.stringify({ title: "Chrome video", playing: true })), command: vi.fn(async () => {}) };
   const feature = new MqttMediaIntegration(backend, enabled);
   feature.attach(client as unknown as MqttClient, "mac-mini", { identifiers: ["mac-mini"], name: "Joe's Mac mini", model: "Mac", manufacturer: "Apple", sw_version: "test" });
   const states = () => client.publish.mock.calls.filter(c => c[0] === "hass-agent/mac-mini/media/state").map(c => JSON.parse(c[1]));
@@ -103,5 +103,30 @@ describe("MQTT media integration (same broker, isolated protocol)", () => {
     await new Promise(resolve => setTimeout(resolve, 10));
     expect(nativeSpawn).not.toHaveBeenCalled();
     expect(client.publish.mock.calls.filter(c => c[0] === "hass-agent/mac-mini/media/result")).toHaveLength(0);
+  });
+});
+
+
+describe("MQTT private artwork transport", () => {
+  it("uses a separate bounded retained envelope, never sensor attributes or control receipts", async () => {
+    const data = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAusB9Wl6SioAAAAASUVORK5CYII=";
+    const read = vi.fn(async () => JSON.stringify({ title: "Chrome video", playing: true, artworkMimeType: "image/png", artworkData: data }));
+    const { client, states, backend, feature } = setup(true, read);
+    await vi.waitFor(() => expect(client.publish.mock.calls.some(c => c[0].endsWith("/artwork") && c[1])).toBe(true));
+    const envelope = client.publish.mock.calls.find(c => c[0].endsWith("/artwork") && c[1])!;
+    expect(envelope[2]).toEqual({ qos: 1, retain: true });
+    expect(JSON.parse(envelope[1])).toMatchObject({ key: states().at(-1).artwork_key, mime: "image/png", data });
+    expect(states().every(s => !("artworkData" in s) && !("data" in s))).toBe(true);
+    expect(backend.command).not.toHaveBeenCalled();
+    client.emit("connect");
+    const messages = client.publish.mock.calls.filter(c => c[0].endsWith("/artwork"));
+    expect(messages.at(-1)?.[1]).toBe("");
+    feature.stop();
+  });
+  it("opt out clears retained artwork and performs no image reads", () => {
+    const read = vi.fn();
+    const { client } = setup(false, read);
+    expect(client.publish).toHaveBeenCalledWith("hass-agent/mac-mini/media/artwork", "", { qos: 1, retain: true });
+    expect(read).not.toHaveBeenCalled();
   });
 });
