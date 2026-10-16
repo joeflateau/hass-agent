@@ -1,0 +1,12 @@
+{
+  "title": "Hass Agent Media",
+  "config": {
+    "step": {
+      "user": {
+        "title": "Add hass-agent media players",
+        "description": "Automatically add a media player to each hass-agent MQTT device with Now Playing enabled. Uses your existing MQTT connection; no per-device setup. If there are no players yet, leave this integration enabled: players appear automatically when a Mac's hass-agent publishes Now Playing. Start hass-agent in the Mac's logged-in desktop session."
+      }
+    },
+    "abort": {"already_configured": "Hass Agent Media is already configured.", "mqtt_required": "Set up the MQTT integration first, then add Hass Agent Media."}
+  }
+}

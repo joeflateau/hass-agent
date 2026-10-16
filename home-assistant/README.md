@@ -25,8 +25,11 @@ home-assistant/
 
 See [Now Playing contract](../media/README.md) for default-on GUI-session metadata,
 four media buttons, correlated frame requests through HA `mqtt.publish`, and
-availability/unknown-outcome semantics. No HA custom integration is needed.
-HA's native MQTT platform does not support `media_player` discovery.
+availability/unknown-outcome semantics. For native HA media cards and standard
+`media_player` services, install [Hass Agent Media](../custom_components/hass_agent_media/README.md).
+Enable it once to add a Media entity to every existing and future hass-agent
+MQTT Mac. Sensors/buttons remain available without the companion. HA's native
+MQTT platform itself does not support `media_player` discovery.
 
 ### Custom Cards
 
