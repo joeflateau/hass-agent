@@ -159,6 +159,20 @@ fi
 log_info "Extracting archive..."
 tar -xzf "hass-agent.tar.gz"
 
+# Verify the exact staged executable AND its embedded helper before touching a
+# running service. No GUI metadata read or playback is performed here.
+NEXT_BINARY="$INSTALL_DIR/.hass-agent.install.$$"
+trap 'rm -f "$NEXT_BINARY"' EXIT
+cp hass-agent "$NEXT_BINARY"
+chmod +x "$NEXT_BINARY"
+codesign --verify --strict "$NEXT_BINARY"
+"$NEXT_BINARY" media-runtime-check
+if [[ -f "$INSTALL_DIR/hass-agent" ]]; then
+    cp -p "$INSTALL_DIR/hass-agent" "$INSTALL_DIR/.hass-agent.previous.$$"
+    mv -f "$INSTALL_DIR/.hass-agent.previous.$$" "$INSTALL_DIR/hass-agent.previous"
+    log_info "Previous executable preserved at $INSTALL_DIR/hass-agent.previous"
+fi
+
 
 # Create config directory
 CONFIG_DIR="$HOME/.config/hass-agent"
@@ -168,7 +182,7 @@ mkdir -p "$CONFIG_DIR"
 if [[ ! -f "$CONFIG_DIR/.env" && -f ".env.example" ]]; then
     log_info "Creating default configuration..."
     cp .env.example "$CONFIG_DIR/.env"
-    log_warning "Please edit $CONFIG_DIR/.env with your MQTT settings"
+    log_warning "Edit $CONFIG_DIR/.env: MQTT settings, a unique DEVICE_ID, and the correct DEVICE_NAME before relying on HA discovery"
 fi
 
 # Create LaunchAgent plist
@@ -210,8 +224,7 @@ fi
 
 # Install executable
 log_info "Installing executable to $INSTALL_DIR..."
-cp hass-agent "$INSTALL_DIR/"
-chmod +x "$INSTALL_DIR/hass-agent"
+mv -f "$NEXT_BINARY" "$INSTALL_DIR/hass-agent"
 
 # Download fresh Data Dragon data
 log_info "Downloading League of Legends Data Dragon data..."
@@ -265,7 +278,7 @@ fi
 if [[ "$IS_UPGRADE" == "false" ]]; then
     echo ""
     log_info "Next steps:"
-    echo "   1. Edit $CONFIG_DIR/.env with your MQTT broker settings"
+    echo "   1. Edit $CONFIG_DIR/.env: MQTT settings, unique DEVICE_ID, correct DEVICE_NAME"
     echo "   2. Restart the service if you made configuration changes"
     echo "   3. Check Home Assistant for new device entities"
     echo "   4. Update LoL data anytime with: $INSTALL_DIR/hass-agent update-data-dragon"

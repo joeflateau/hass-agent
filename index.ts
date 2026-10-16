@@ -37,6 +37,11 @@ import {
 } from "./display-status-reader.ts";
 import { loadEnvironmentFile } from "./environment.ts";
 import { LoLStatusReader, type LoLGameStatus } from "./lol-status-reader.ts";
+import { MqttMediaIntegration } from "./media/mqtt.ts";
+import { nativeMediaBackend } from "./media/controller.ts";
+import { parseNowPlaying } from "./media/model.ts";
+import { randomUUID } from "node:crypto";
+import { prepareRuntime } from "./media/runtime.ts";
 import {
   createMacOSCommands,
   RETIRED_MACOS_COMMAND_IDS,
@@ -124,6 +129,7 @@ const envSchema = z.object({
     .regex(/^\d+$/)
     .transform(Number)
     .default(() => 30000),
+  MEDIA_ENABLED: z.enum(["true", "false"]).default("true").transform(value => value === "true"),
   AUTO_UPGRADE: z
     .string()
     .transform((val) => val.toLowerCase() === "true")
@@ -170,6 +176,7 @@ class MacOSPowerAgent {
   private autoUpdater: AutoUpdater;
   private autoUpgradeSettings: AutoUpgradeSettingsStore;
   private isShuttingDown = false;
+  private media: MqttMediaIntegration;
 
   constructor(
     config: z.infer<typeof envSchema>,
@@ -197,6 +204,8 @@ class MacOSPowerAgent {
     };
 
     this.mqttFramework = new MqttDeviceFramework(mqttConfig, logger);
+    this.media = new MqttMediaIntegration(undefined, this.config.MEDIA_ENABLED === true);
+    this.mqttFramework.registerIntegration(this.media);
     this.mqttFramework.registerCommands(createMacOSCommands());
     this.mqttFramework.retireCommands(RETIRED_MACOS_COMMAND_IDS);
 
@@ -552,6 +561,7 @@ class MacOSPowerAgent {
 
     // Start LoL status monitoring
     this.lolStatusReader.startMonitoring();
+    this.media.start();
 
     // Initial sensor data publish
     this.publishSensorData();
@@ -592,6 +602,7 @@ class MacOSPowerAgent {
 
     // Stop LoL status monitoring
     this.lolStatusReader.stopMonitoring();
+    this.media.stop();
 
     // Disconnect MQTT last (this will handle cleanup)
     try {
@@ -622,6 +633,8 @@ Usage: hass-agent [command] [options]
 Commands:
   run                    Start the Home Assistant agent (default)
   update-data-dragon     Update League of Legends static data from Riot's Data Dragon API
+  media-status           Read Now Playing in this GUI login (no MQTT or playback)
+  media-runtime-check    Verify/extract bundled media runtime (no GUI read or playback)
   help, --help, -h       Show this help message
 
 Examples:
@@ -638,6 +651,7 @@ Environment Variables:
   DEVICE_NAME              Device display name (default: computer name)
   UPDATE_INTERVAL          Update interval in ms (default: 30000)
   AUTO_UPGRADE             Enable auto-upgrades (default: true)
+  MEDIA_ENABLED            Publish Now Playing and four media controls (default: true)
   LOG_LEVEL                Log level (default: info)
 
 For more information, see: https://github.com/joeflateau/hass-agent
@@ -659,6 +673,22 @@ async function handleUpdateDataDragon(): Promise<void> {
 // Main async function
 async function main() {
   const { command, args } = parseCommand();
+
+  if (command === "media-runtime-check") {
+    try { await prepareRuntime(); console.log(JSON.stringify({ runtime: "media-control 0.7.7", verified: true })); }
+    catch (error) { console.error(error instanceof Error ? error.message : "Invalid media runtime"); process.exitCode = 1; }
+    return;
+  }
+
+  if (command === "media-status") {
+    try {
+      console.log(JSON.stringify(parseNowPlaying(await nativeMediaBackend().read(new AbortController().signal), randomUUID())));
+    } catch (error) {
+      console.error(error instanceof Error ? error.message : "Now Playing reader unavailable");
+      process.exitCode = 1;
+    }
+    return;
+  }
 
   // Handle help command
   if (command === "help" || command === "--help" || command === "-h") {
@@ -748,7 +778,7 @@ async function main() {
 }
 
 // Export for testing
-export { getComputerName, MacOSPowerAgent };
+export { envSchema, getComputerName, MacOSPowerAgent };
 
 // Start the application only when this file is run directly
 if (import.meta.main) {

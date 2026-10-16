@@ -12,6 +12,7 @@ via MQTT with automatic device discovery.
 - 🎮 **League of Legends Integration**: Real-time in-game status tracking via Game Client API
 - 🏠 **Home Assistant Integration**: Automatic device discovery via MQTT
 - 🎛️ **Remote Commands**: Allowlisted Home Assistant buttons for safe macOS actions
+- 🎵 **Now Playing**: GUI-login media metadata and play/pause/previous/next via HA
 - 📊 **Real-time Updates**: Configurable update intervals with adaptive polling
 - 🖥️ **macOS Native**: Uses system APIs and commands (`login.framework`, `pmset`, `system_profiler`)
 - 📦 **Single Executable**: Compiled to a single binary file
@@ -79,6 +80,8 @@ exact version for asdf users.
 
 3. **Build executable:**
    ```bash
+   # macOS only: prepare pinned bundled media runtime (requires CMake + Xcode tools)
+   bash scripts/prepare-media-runtime.sh
    npm run build
    ```
 
@@ -108,6 +111,7 @@ UPDATE_INTERVAL=30000  # 30 seconds
 | `DEVICE_ID`              | **Unique device identifier**     | **Yes**  | -                              |
 | `DEVICE_NAME`            | Device name in Home Assistant    | No       | System hostname                |
 | `UPDATE_INTERVAL`        | Update interval in milliseconds  | No       | `30000`                        |
+| `MEDIA_ENABLED`          | GUI-login Now Playing + controls | No       | `true` (explicit opt-out)              |
 | `AUTO_UPGRADE`           | Enable automatic upgrades        | No       | `true`                         |
 | `UPGRADE_CHECK_INTERVAL` | Auto-upgrade check interval (ms) | No       | `10800000` (3 hours)           |
 | `INSTALL_SCRIPT_URL`     | URL to install script            | No       | GitHub releases install script |
@@ -267,6 +271,10 @@ curl -fsSL https://github.com/joeflateau/hass-agent/releases/latest/download/ins
    ```
 
 ## Home Assistant Integration
+
+Music setup, exact entity/topic/request/result contract, pinned runtime
+packaging and verification gates: [Mac Now Playing](media/README.md). This uses
+MQTT sensors/buttons, not unsupported MQTT `media_player` discovery. Music is on by default; set `MEDIA_ENABLED=false` to disable it.
 
 The agent automatically registers the following entities in Home Assistant:
 

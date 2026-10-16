@@ -21,6 +21,13 @@ home-assistant/
 
 ## Available Components
 
+### Mac music
+
+See [Now Playing contract](../media/README.md) for default-on GUI-session metadata,
+four media buttons, correlated frame requests through HA `mqtt.publish`, and
+availability/unknown-outcome semantics. No HA custom integration is needed.
+HA's native MQTT platform does not support `media_player` discovery.
+
 ### Custom Cards
 
 - **LoL Status Card** (`custom-cards/lol-status-card.js`) - Real-time League of Legends game monitoring

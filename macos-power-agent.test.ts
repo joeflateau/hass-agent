@@ -52,6 +52,7 @@ const {
     disconnect: vi.fn(),
     createDeviceEmitter: vi.fn(() => mockDeviceEmitter),
     registerCommands: vi.fn(),
+    registerIntegration: vi.fn(),
     registerSwitches: vi.fn(),
     registerNumbers: vi.fn(),
     retireCommands: vi.fn(),
@@ -95,9 +96,14 @@ vi.mock("./mqtt-emitter.ts", () => ({
 }));
 
 // Import after mocking
-import { MacOSPowerAgent } from "./index.ts";
+import { envSchema, MacOSPowerAgent } from "./index.ts";
 
 describe("MacOSPowerAgent", () => {
+  it("enables music by default while preserving an explicit opt-out", () => {
+    expect(envSchema.parse({ DEVICE_ID: "mac-mini" }).MEDIA_ENABLED).toBe(true);
+    expect(envSchema.parse({ DEVICE_ID: "mac-mini", MEDIA_ENABLED: "false" }).MEDIA_ENABLED).toBe(false);
+    expect(() => envSchema.parse({ DEVICE_ID: "mac-mini", MEDIA_ENABLED: "maybe" })).toThrow();
+  });
   let agent: MacOSPowerAgent;
   let config: any;
 
