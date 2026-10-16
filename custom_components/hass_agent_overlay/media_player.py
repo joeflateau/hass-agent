@@ -20,6 +20,7 @@ from homeassistant.helpers.entity_platform import AddEntitiesCallback, async_get
 from homeassistant.helpers.event import async_call_later, async_track_state_change_event
 from homeassistant.util import dt as dt_util
 
+from .artwork import Artwork, MAX_PAYLOAD, decode_artwork
 from .const import FRESHNESS_SECONDS, RESULT_TIMEOUT_SECONDS
 from .discovery import Source, discover
 from .snapshot import Snapshot, number, text, timestamp
@@ -126,6 +127,10 @@ class HassAgentMediaPlayer(MediaPlayerEntity):
         self._last_result: dict[str, Any] | None = None
         self._last_observed: Snapshot | None = None
         self._require_newer_observation = False
+        self._artwork: Artwork | None = None
+        self._artwork_revision = 0
+        self._artwork_task: asyncio.Task | None = None
+        self._artwork_pending: bytes | str | None = None
 
     async def async_added_to_hass(self) -> None:
         await super().async_added_to_hass()
@@ -133,12 +138,48 @@ class HassAgentMediaPlayer(MediaPlayerEntity):
         self.async_on_remove(self._cleanup)
         self.async_on_remove(mqtt.async_subscribe_connection_status(self.hass, self._connection_changed))
         self._bind_source()
+        self.async_on_remove(await mqtt.async_subscribe(
+            self.hass, f"hass-agent/{self.source_info.agent_id}/media/artwork",
+            self._artwork_message, qos=1, encoding=None,
+        ))
+
+    @callback
+    def _clear_artwork(self) -> None:
+        self._artwork_revision += 1
+        self._artwork = None
+        self._artwork_pending = None
+
+    @callback
+    def _artwork_message(self, message: Any) -> None:
+        self._artwork_revision += 1
+        payload = message.payload
+        # Coalesce bursts into one worker plus one bounded latest payload.
+        self._artwork_pending = payload if 0 < len(payload) <= MAX_PAYLOAD else None
+        if self._artwork_pending is None:
+            self._artwork = None
+        if self._artwork_pending is not None and self._artwork_task is None:
+            self._artwork_task = self.hass.async_create_task(self._decode_artwork(), "decode hass-agent artwork")
+        self.async_write_ha_state()
+
+    async def _decode_artwork(self) -> None:
+        try:
+            while self._added and self._artwork_pending is not None:
+                payload = self._artwork_pending
+                self._artwork_pending = None
+                revision = self._artwork_revision
+                art = await self.hass.async_add_executor_job(decode_artwork, payload)
+                if revision == self._artwork_revision and self._added:
+                    self._artwork = art
+                    self.async_write_ha_state()
+        finally:
+            self._artwork_task = None
 
     @callback
     def _connection_changed(self, connected: bool) -> None:
         # A reconnect must wait for a genuinely newer producer observation,
         # rather than reviving the retained state that preceded the outage.
         self._require_newer_observation = True
+        self._clear_artwork()
         self._snapshot = None
         if self._expiry_cancel:
             self._expiry_cancel()
@@ -149,6 +190,7 @@ class HassAgentMediaPlayer(MediaPlayerEntity):
     @callback
     def _cleanup(self) -> None:
         self._added = False
+        self._clear_artwork()
         self._unbind_source()
         self._abort_pending("The media player was unloaded. Check playback before trying again.")
 
@@ -166,6 +208,7 @@ class HassAgentMediaPlayer(MediaPlayerEntity):
         if source == self.source_info:
             return
         self.source_info = source
+        self._clear_artwork()
         if self._added:
             self._unbind_source()
             self._bind_source()
@@ -189,6 +232,7 @@ class HassAgentMediaPlayer(MediaPlayerEntity):
 
     @callback
     def _refresh(self) -> None:
+        previous_artwork_key = self._snapshot.attributes.get("artwork_key") if self._snapshot else None
         self._snapshot = Snapshot.from_state(self.hass.states.get(self.source_info.entity_id))
         snapshot = self._snapshot
         previous = self._last_observed
@@ -210,6 +254,13 @@ class HassAgentMediaPlayer(MediaPlayerEntity):
             self._expiry_cancel()
             self._expiry_cancel = None
         snapshot = self._snapshot
+        if snapshot is None or not snapshot.fresh() or snapshot.state == "idle":
+            self._clear_artwork()
+        elif (self._artwork is not None and self._artwork.key == previous_artwork_key
+              and self._artwork.key != snapshot.attributes.get("artwork_key")):
+            # Retire the old current image, but preserve a bounded newer envelope
+            # that arrived ahead of its metadata. Serving is always key-gated.
+            self._artwork = None
         if snapshot is not None and snapshot.fresh():
             delay = FRESHNESS_SECONDS - (dt_util.utcnow() - snapshot.observed).total_seconds()
             self._expiry_cancel = async_call_later(self.hass, delay + 0.05, self._expire)
@@ -219,6 +270,7 @@ class HassAgentMediaPlayer(MediaPlayerEntity):
     @callback
     def _expire(self, _now: Any) -> None:
         self._expiry_cancel = None
+        self._clear_artwork()
         self._abort_pending("The Mac playback view expired. Check playback before trying again.")
         self.async_write_ha_state()
 
@@ -250,6 +302,22 @@ class HassAgentMediaPlayer(MediaPlayerEntity):
     def supported_features(self) -> MediaPlayerEntityFeature:
         snapshot = self.current
         return TRANSPORT_FEATURES if snapshot and snapshot.state != "idle" and self.source_info.result_entity_id else MediaPlayerEntityFeature(0)
+
+    @property
+    def current_artwork(self) -> Artwork | None:
+        art = self._artwork
+        key = self.track.get("artwork_key")
+        return art if art is not None and art.key == key else None
+
+    @property
+    def media_image_hash(self) -> str | None:
+        art = self.current_artwork
+        # Include the per-track generation: A -> B -> A must not reuse an old URL.
+        return f"{art.key}-{art.sha256}" if art else None
+
+    async def async_get_media_image(self) -> tuple[bytes | None, str | None]:
+        art = self.current_artwork
+        return (art.data, art.mime) if art else (None, None)
 
     @property
     def media_content_type(self) -> MediaType | None:

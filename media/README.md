@@ -16,7 +16,8 @@ Run the existing agent in that user's GUI login. A successful
 SSH in another account does not. The `/dev/console` owner and launchd `Aqua`
 manager must match. Logging out/switching away makes media unavailable. There
 is no privileged cross-login helper, source selection, app launch, volume, seek,
-artwork, inferred source URL, arbitrary arguments, or shell command surface.
+inferred source URL, arbitrary arguments, or shell command surface. Optional genuine
+embedded artwork is described below; it never adds a playback action.
 
 Spotify, Chrome/YouTube and browser-based Octo Brain playback use the same macOS
 Now Playing reader, **only when the application actually publishes metadata**.
@@ -35,6 +36,7 @@ an entity ID. Example defaults might be `sensor.joe_s_mac_mini_now_playing` and
 | Topic | Direction | Contract |
 | --- | --- | --- |
 | `hass-agent/D/media/state` | Mac → HA | Retained snapshot, QoS 0 |
+| `hass-agent/D/media/artwork` | Mac → HA | Optional bounded retained artwork envelope, QoS 1 |
 | `hass-agent/D/media/command` | HA → Mac | Non-retained JSON request, QoS 0 |
 | `hass-agent/D/media/result` | Mac → HA | Non-retained correlated receipt, QoS 0 |
 | `homeassistant/status/D` | Existing agent LWT | Agent online/offline, QoS 1 retained |
@@ -115,6 +117,61 @@ a lost result remains unknown. Never auto-retry a skip or infer success from a
 later unrelated state change. Refresh current state before a deliberate new tap.
 The shared household **Last Command** sensor/protocol is unchanged.
 
+## Genuine native artwork
+
+Artwork is optional and additive to contract v1. Every published state includes
+`artwork_key`: a random UUID for the current observed track/source/agent session,
+or null for idle/unavailable/disabled artwork. It changes across A → B → A even
+when A's visible metadata is identical. This pointer never changes command track
+identity or receipts. Metadata/preflight still use `get --no-artwork`.
+
+A separate single-flight read uses the pinned reader's genuine `artworkData`
+and `artworkMimeType`; no title search, URL guessing, remote fetch, or fabricated
+cover. Its metadata must match the current track/source/session before image
+publication. A late result is discarded after any observed ownership transition.
+
+`hass-agent/D/media/artwork` holds **one** retained JSON envelope:
+
+```json
+{"key":"current-state-artwork_key","sha256":"sha256-of-decoded-bytes","mime":"image/png","data":"base64-encoded-native-image"}
+```
+
+An empty payload deletes the retained image. Only PNG/JPEG, at most **512 KiB
+decoded**, is accepted; the separate helper response is capped at **1 MiB** and
+its process at four seconds. Image failure does not change metadata or controls.
+The first missing image retries after at least five seconds; repeated misses
+and successful images are rechecked at most every thirty seconds (on metadata
+observations). Successful unchanged images are not republished. Artwork that
+arrives late can therefore appear later; an image removed from an otherwise
+unchanged track clears at the next successful recheck. Old art clears immediately
+on an observed track/source/session/idle/unavailable transition. Poll timestamps
+and transport status never imply that artwork exists.
+
+The Overlay subscribes to this fixed topic independently; **image bytes never
+enter HA sensor/button/player attributes or the recorder**. It validates base64,
+SHA-256, MIME and raster structure off the event loop, with limits of 4096px per
+edge, 16 million pixels and one still frame. It keeps one current image in memory
+plus one coalesced pending payload. Invalid, unsupported, oversized or absent
+artwork remains absent. It requires a matching `artwork_key` and fresh current
+metadata both when advertising and serving the image. Reconnect/unload/expiry
+clear its image cache. Older agents/overlays remain compatible without artwork.
+
+The native player exposes HA's standard **`entity_picture`** tokenized relative
+`/api/media_player_proxy/<entity_id>?token=…&cache=…` URL. The cache identity combines
+the per-track key and decoded content hash. `async_get_media_image()` returns the
+validated bytes/MIME; absent or stale artwork returns no bytes (HA proxy 404).
+There is no external `media_image_url`, extra HTTP server, public image hosting,
+or frame-to-Mac link. Consumers must use the current fresh entity's picture,
+resolve it against their trusted HA origin, respect HA authentication and clear
+their own displayed/cached image when the entity clears. Proxy URLs contain a
+private access token: do not log or publish them, their query strings, or media
+bytes. HA's standard proxy response has its own one-hour browser cache policy;
+changing/clearing the entity picture is how native consumers retire an old URL.
+
+Source capability is proven by the pinned reader/adapter; actual app artwork,
+image size and visual behavior require separate live qualification. A source
+that publishes no embedded art or exceeds these limits has no artwork.
+
 ## Architecture, packaging and limits
 
 `controller.ts` owns single-flight polling and playback. `mqtt.ts` owns discovery,
@@ -123,7 +180,9 @@ helper output/requests. `process.ts` invokes exact executable/arguments without 
 shell, kills at 4 seconds, limits stdout to 64 KiB, ignores stderr, and aborts on
 shutdown. Media polling starts independently of battery/display/League/updates;
 it schedules 5 seconds **after completion**, never accumulates polls or waits
-in the other readers' lifecycle. No per-tick metadata logs or artwork loads.
+in the other readers' lifecycle. No per-tick metadata logs. Artwork reads run
+independently, with their own bounded cadence and output ceiling; metadata and
+commands never await image IO.
 Result ledger is bounded to 256 entries per minute; excess actions reject.
 Sensor expires after 20 seconds; both sensor and buttons also require existing
 agent availability and fresh, appropriate media state. Idle disables controls.

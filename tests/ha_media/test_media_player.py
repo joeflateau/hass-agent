@@ -73,6 +73,7 @@ async def env(tmp_path, monkeypatch):
             device_id=device.id, suggested_object_id=f"mini_{name}",
         )
     hass.states.async_set("sensor.mini_now_playing", "playing", attrs())
+    monkeypatch.setattr(module.mqtt, "async_subscribe", AsyncMock(return_value=lambda: None))
     publish = AsyncMock()
     monkeypatch.setattr(module.mqtt, "async_publish", publish)
     monkeypatch.setattr(module.mqtt, "is_connected", lambda _: True)
@@ -351,3 +352,146 @@ async def test_config_flow_singleton_and_missing_mqtt(env):
     del hass.config_entries._entries[mqtt_entry.entry_id]
     result = await flow.async_step_user({})
     assert result["type"] == "abort" and result["reason"] == "mqtt_required"
+
+
+def art_payload(key=None, **overrides):
+    import base64
+    import hashlib
+    from io import BytesIO
+    from PIL import Image
+    buffer = BytesIO()
+    Image.new("RGB", (4, 4), (24, 80, 140)).save(buffer, "PNG")
+    data = buffer.getvalue()
+    return json.dumps({"key": key or str(uuid4()), "sha256": hashlib.sha256(data).hexdigest(),
+                       "mime": "image/png", "data": base64.b64encode(data).decode(), **overrides}).encode(), data
+
+
+async def deliver_art(env, payload):
+    from types import SimpleNamespace
+    player(env)._artwork_message(SimpleNamespace(payload=payload))
+    await env[0].async_block_till_done()
+
+
+async def test_artwork_standard_proxy_and_both_message_orders(env):
+    p = player(env)
+    key = str(uuid4())
+    payload, data = art_payload(key)
+    # Artwork can arrive before its metadata, even across an intervening old
+    # observation; never display it under the old track or lose it to that poll.
+    old_key = str(uuid4())
+    await update(env, artwork_key=old_key)
+    await deliver_art(env, payload)
+    assert p.media_image_hash is None
+    await update(env, artwork_key=old_key)
+    assert p.media_image_hash is None
+    await update(env, artwork_key=key)
+    assert await p.async_get_media_image() == (data, "image/png")
+    picture = env[0].states.get(p.entity_id).attributes["entity_picture"]
+    assert picture.startswith(f"/api/media_player_proxy/{p.entity_id}?")
+    assert "cache=" + p.media_image_hash in picture
+    assert p.media_image_url is None and not p.media_image_remotely_accessible
+    assert "data" not in env[0].states.get(p.entity_id).attributes
+    # Fresh paused state retains exactly this image and URL.
+    await update(env, "paused", artwork_key=key)
+    assert env[0].states.get(p.entity_id).attributes["entity_picture"] == picture
+    assert await p.async_get_media_image() == (data, "image/png")
+    # State before image: clear immediately, then accept only matching image.
+    next_key = str(uuid4())
+    await update(env, title="Next", version="b" * 64, artwork_key=next_key)
+    assert p.media_image_hash is None and await p.async_get_media_image() == (None, None)
+    payload, _ = art_payload(next_key)
+    await deliver_art(env, payload)
+    assert p.media_image_hash is not None
+    # An old retained/late envelope cannot supply the new track's picture.
+    old, _ = art_payload(key)
+    await deliver_art(env, old)
+    assert p.media_image_hash is None and await p.async_get_media_image() == (None, None)
+    assert p.media_title == "Next" and p.supported_features == module.TRANSPORT_FEATURES
+
+
+@pytest.mark.parametrize("state", ["idle", "unavailable", "stale", "disconnect", "new_session"])
+async def test_artwork_clears_on_metadata_lifecycle(env, monkeypatch, state):
+    p = player(env)
+    key = str(uuid4())
+    await update(env, artwork_key=key)
+    payload, _ = art_payload(key)
+    await deliver_art(env, payload)
+    assert p.media_image_hash is not None
+    if state == "stale":
+        await update(env, artwork_key=key, observed_at=(dt_util.utcnow() - timedelta(seconds=16)).isoformat())
+    elif state == "disconnect":
+        monkeypatch.setattr(module.mqtt, "is_connected", lambda _: False)
+        p._connection_changed(False)
+    elif state == "new_session":
+        await update(env, artwork_key=str(uuid4()), session=str(uuid4()))
+    else:
+        await update(env, state, artwork_key=key)
+    assert p.media_image_hash is None
+    assert await p.async_get_media_image() == (None, None)
+    assert "entity_picture" not in env[0].states.get(p.entity_id).attributes
+
+
+async def test_invalid_artwork_never_breaks_playback_metadata(env):
+    from custom_components.hass_agent_overlay.artwork import MAX_PAYLOAD
+    p = player(env)
+    key = str(uuid4())
+    await update(env, artwork_key=key)
+    for payload in [b"{", b"[]", b"x" * (MAX_PAYLOAD + 1), art_payload(key, mime="image/svg+xml")[0],
+                    art_payload(key, data="https://not-an-image.invalid")[0], art_payload(key, sha256="0" * 64)[0]]:
+        await deliver_art(env, payload)
+        assert p.media_image_hash is None
+        assert p.media_title == "Track" and p.supported_features == module.TRANSPORT_FEATURES
+    payload, data = art_payload(key)
+    await deliver_art(env, payload)
+    assert await p.async_get_media_image() == (data, "image/png")
+    await deliver_art(env, b"")
+    assert p.media_image_hash is None
+
+
+async def test_slow_artwork_decode_cannot_resurrect_after_clear_or_unload(env, monkeypatch):
+    import threading
+    p = player(env)
+    started, release = threading.Event(), threading.Event()
+    original = module.decode_artwork
+    def blocked(payload):
+        started.set()
+        release.wait(3)
+        return original(payload)
+    monkeypatch.setattr(module, "decode_artwork", blocked)
+    key = str(uuid4())
+    await update(env, artwork_key=key)
+    payload, _ = art_payload(key)
+    from types import SimpleNamespace
+    p._artwork_message(SimpleNamespace(payload=payload))
+    await asyncio.get_running_loop().run_in_executor(None, started.wait, 2)
+    p._artwork_message(SimpleNamespace(payload=b""))
+    release.set()
+    await env[0].async_block_till_done()
+    assert p.media_image_hash is None
+    assert await p.async_get_media_image() == (None, None)
+
+
+async def test_real_ha_media_image_view_auth_and_clearing(env):
+    from types import SimpleNamespace
+    from aiohttp import web
+    from aiohttp.test_utils import make_mocked_request
+    from homeassistant.components.http.const import KEY_AUTHENTICATED
+    from homeassistant.components.media_player import MediaPlayerImageView
+    p = player(env)
+    key = str(uuid4())
+    await update(env, artwork_key=key)
+    payload, data = art_payload(key)
+    await deliver_art(env, payload)
+    view = MediaPlayerImageView(SimpleNamespace(get_entity=lambda _: p))
+    request = make_mocked_request("GET", f"/api/media_player_proxy/{p.entity_id}?token={p.access_token}")
+    request[KEY_AUTHENTICATED] = False
+    response = await view.get(request, p.entity_id)
+    assert response.status == 200 and response.body == data
+    assert response.content_type == "image/png"
+    denied = make_mocked_request("GET", f"/api/media_player_proxy/{p.entity_id}")
+    denied[KEY_AUTHENTICATED] = False
+    with pytest.raises(web.HTTPForbidden):
+        await view.get(denied, p.entity_id)
+    await update(env, "idle")
+    response = await view.get(request, p.entity_id)
+    assert response.status == 404

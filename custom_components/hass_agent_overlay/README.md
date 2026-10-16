@@ -51,7 +51,15 @@ dashboards, but disabling the source/result sensors disables their companion.
   only for known normal-rate playback; unsupported/unknown rates retain the raw
   position without a false running timeline.
 - Play, pause, previous, next, plus HA's contextual play/pause service. No volume,
-  seek, artwork, source selection, app launch, `play_media`, or power controls.
+  seek, source selection, app launch, `play_media`, or power controls.
+- Optional genuine native cover art through standard HA `entity_picture` and
+  its media-player proxy. No public cover URL, title search or Mac connection.
+  PNG/JPEG only, at most 512 KiB, 4096px per edge, 16 million pixels and one frame.
+  Image bytes stay in a bounded memory cache, not entity attributes/recorder.
+  Fresh paused playback keeps its art; track/source/session changes, idle,
+  unavailable, disconnect, expiry or unload clear it. Missing/invalid/oversized
+  art does not affect metadata or transport. The Mac rechecks missing art after
+  five seconds initially, then every thirty seconds; late art can appear later.
 - Snapshot freshness is independently checked at 15 seconds. No restored player
   metadata is accepted as current; existing MQTT LWT/expiry still apply.
 
@@ -70,7 +78,7 @@ raises a clear error: the action may have happened, so check playback before
 trying again, especially for a skip. A later unrelated track change never
 converts a missing receipt into success.
 
-The unchanged wire contract is documented in [Mac Now Playing](../../media/README.md).
+The backward-compatible metadata/control contract and additive artwork topic are documented in [Mac Now Playing](../../media/README.md).
 Only MQTT sensor IDs `DEVICE_ID_now_playing` and `DEVICE_ID_media_last_action`
 on device identifier `("mqtt", DEVICE_ID)` are accepted. Device IDs must be
 1–128 ASCII letters, digits, `_` or `-`; MQTT wildcards and topic substitution
