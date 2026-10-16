@@ -5,7 +5,7 @@
 Metadata and four native transport actions in the **existing hass-agent**
 MQTT connection. Run in the active user's GUI LaunchAgent login. The frame talks
 to HA; neither HA nor the frame needs SSH access or access to another macOS
-user's login. The optional [Hass Agent Media companion](../custom_components/hass_agent_media/README.md)
+user's login. The optional [Hass Agent Overlay companion](../custom_components/hass_agent_overlay/README.md)
 automatically creates native HA `media_player` entities from these MQTT devices.
 The existing sensor/buttons still work without the companion. On by default (`MEDIA_ENABLED=true`),
 including on existing devices after upgrade; set `MEDIA_ENABLED=false` to disable. Device identity and broker
@@ -73,7 +73,7 @@ snapshot attributes, so entity renames do not break it. HA 2026.8.3 supports MQT
 button `command_template` with `this`, but **does not support MQTT media_player
 discovery**. Its native Universal player reads title/duration/position only from
 child media players, not sensor attribute overrides; a Universal wrapper would
-lose this metadata. The native [companion integration](../custom_components/hass_agent_media/README.md)
+lose this metadata. The native [companion integration](../custom_components/hass_agent_overlay/README.md)
 maps the real MQTT sensor into a `MediaPlayerEntity`, retaining metadata and the
 correlated command protocol; it does not advertise unsupported MQTT discovery.
 

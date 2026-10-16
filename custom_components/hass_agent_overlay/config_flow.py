@@ -8,7 +8,7 @@ from homeassistant.config_entries import ConfigFlowResult
 from .const import DOMAIN, TITLE
 
 
-class HassAgentMediaConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
+class HassAgentOverlayConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
     """Configure one companion integration, without copying broker credentials."""
 
     VERSION = 1

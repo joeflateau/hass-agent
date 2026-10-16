@@ -1,4 +1,8 @@
-# Hass Agent Media
+# Hass Agent Overlay
+
+A Home Assistant-native overlay for hass-agent MQTT devices. Media is the first
+feature; the integration name intentionally leaves room for other native entity
+platforms later. It does not replace MQTT or the Mac agent.
 
 A Home Assistant custom integration that automatically adds a native
 `media_player` to each hass-agent MQTT Mac with Now Playing enabled. It uses your
@@ -7,16 +11,16 @@ per-device topic mappings, or Mac SSH access.
 
 ## Install and enable
 
-1. Copy this directory to `/config/custom_components/hass_agent_media`.
+1. Copy this directory to `/config/custom_components/hass_agent_overlay`.
 2. Restart Home Assistant, then choose **Settings → Devices & services → Add
-   integration → Hass Agent Media**. MQTT must already be configured.
+   integration → Hass Agent Overlay**. MQTT must already be configured.
 3. Enable once. Existing and future hass-agent devices get a **Media** entity on
    their existing Mac device. No second Mac device is created.
 
 Alternatively, enable with this YAML and restart:
 
 ```yaml
-hass_agent_media: {}
+hass_agent_overlay: {}
 ```
 
 Both setup paths select the same singleton config entry. If no players appear
@@ -27,7 +31,7 @@ source Now Playing and Last Media Action sensors must remain enabled. Entity
 renames are supported; the integration discovers by MQTT unique IDs and device
 registry identity, not entity names.
 
-The diagnostic **Hass Agent Media discovery** sensor shows **Waiting for a Mac**
+The diagnostic **Hass Agent Overlay discovery** sensor shows **Waiting for a Mac**
 until a source registers, then **Ready** with the number of players. This is
 discovery status, not a claim that a logged-out/offline Mac can play music.
 

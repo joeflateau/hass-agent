@@ -1,4 +1,4 @@
-"""Create native media players from existing hass-agent MQTT devices."""
+"""Overlay native Home Assistant features on existing hass-agent MQTT devices."""
 
 from __future__ import annotations
 

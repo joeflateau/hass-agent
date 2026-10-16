@@ -17,9 +17,9 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry, async_add_e
 class DiscoveryStatus(SensorEntity):
     _attr_should_poll = False
     _attr_entity_category = EntityCategory.DIAGNOSTIC
-    _attr_name = "Hass Agent Media discovery"
+    _attr_name = "Hass Agent Overlay discovery"
     _attr_unique_id = f"{DOMAIN}_discovery_status"
-    _attr_icon = "mdi:music-box-multiple"
+    _attr_icon = "mdi:layers"
 
     def __init__(self, runtime: Runtime) -> None:
         self.runtime = runtime

@@ -24,11 +24,11 @@ from homeassistant.helpers import device_registry as dr, entity_registry as er
 from homeassistant.helpers.entity_platform import EntityPlatform
 from homeassistant.util import dt as dt_util
 
-from custom_components.hass_agent_media.const import DOMAIN
-from custom_components.hass_agent_media.discovery import discover
-from custom_components.hass_agent_media import media_player as module
-from custom_components.hass_agent_media.snapshot import Snapshot
-from custom_components.hass_agent_media.runtime import Runtime
+from custom_components.hass_agent_overlay.const import DOMAIN
+from custom_components.hass_agent_overlay.discovery import discover
+from custom_components.hass_agent_overlay import media_player as module
+from custom_components.hass_agent_overlay.snapshot import Snapshot
+from custom_components.hass_agent_overlay.runtime import Runtime
 
 
 def entry(domain):
@@ -324,7 +324,7 @@ async def test_add_remove_during_pending_add_does_not_orphan_player(env, monkeyp
 
 
 async def test_discovery_status_survives_no_producer(env):
-    from custom_components.hass_agent_media.sensor import DiscoveryStatus
+    from custom_components.hass_agent_overlay.sensor import DiscoveryStatus
     p = player(env)
     runtime = env[3].config_entry.runtime_data
     status = DiscoveryStatus(runtime)
@@ -337,9 +337,9 @@ async def test_discovery_status_survives_no_producer(env):
 
 async def test_config_flow_singleton_and_missing_mqtt(env):
     from homeassistant.data_entry_flow import AbortFlow
-    from custom_components.hass_agent_media.config_flow import HassAgentMediaConfigFlow
+    from custom_components.hass_agent_overlay.config_flow import HassAgentOverlayConfigFlow
     hass = env[0]
-    flow = HassAgentMediaConfigFlow()
+    flow = HassAgentOverlayConfigFlow()
     flow.hass, flow.context, flow.flow_id, flow.handler = hass, {"source": "user"}, uuid4().hex, DOMAIN
     with pytest.raises(AbortFlow, match="already_configured"):
         await flow.async_step_user({})
