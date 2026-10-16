@@ -40,6 +40,21 @@ describe("MQTT media integration (same broker, isolated protocol)", () => {
     expect(configs()).toHaveLength(count + 6);
     expect(backend.command).not.toHaveBeenCalled();
   });
+  it("keeps every discovered button request-ID range within Home Assistant's sandbox limit", () => {
+    const { configs } = setup();
+    const buttons = configs().filter(c => c[0].startsWith("homeassistant/button/"));
+    expect(buttons).toHaveLength(4);
+    for (const [, payload] of buttons) {
+      const template = JSON.parse(payload).command_template as string;
+      const ranges = [...template.matchAll(/range\(\s*(\d+)\s*,\s*(\d+)\s*\)/g)];
+      expect(ranges.length).toBeGreaterThan(0);
+      for (const [, start, stop] of ranges) {
+        // HA's safe_range raises OverflowError above MAX_RANGE = 100000.
+        expect(Number(stop) - Number(start)).toBeGreaterThan(0);
+        expect(Number(stop) - Number(start)).toBeLessThanOrEqual(100_000);
+      }
+    }
+  });
   it("correlates one action receipt, drops retained/duplicate packets and does not route household commands", async () => {
     const { client, states, backend } = setup();
     await vi.waitFor(() => expect(states().at(-1)?.state).toBe("playing"));
