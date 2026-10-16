@@ -71,9 +71,12 @@ Only the short publication itself is single-flight. Subsequent deliberate taps
 do not wait for receipts. There is no queue, automatic retry, or action replay.
 A local publication failure still raises immediately.
 
-Play/pause immediately show temporary **assumed state**, including a re-anchored
+Play/pause immediately show temporary **optimistic state**, including a re-anchored
 normal-rate timeline when available. This is UI feedback, not an observed Mac
-state. Next/previous never invent a track title, artwork or progress reset.
+state. `optimistic_playback` marks the temporary projection; HA’s `assumed_state`
+flag is deliberately not set because it renders separate Play and Pause buttons
+instead of the native contextual toggle. Next/previous never invent a track title,
+artwork or progress reset.
 Any genuinely newer source observation corrects the assumption, even when it
 disagrees; track/source/session changes, stale/idle/unavailable state, disconnect,
 unload, or five seconds without an update clear it. The underlying MQTT snapshot

@@ -110,7 +110,7 @@ Receipt: `request_id`, `action`, `timestamp`, `status`, optional `reason`:
 - `unknown`: native call failed/timed out after it may have happened.
 
 The native Overlay services complete immediately after local MQTT publication.
-Play/pause show bounded temporary assumed state; subscribed Mac telemetry replaces
+Play/pause show bounded temporary optimistic state; subscribed Mac telemetry replaces
 it. Previous/Next do not fabricate track metadata. A missing playback confirmation
 is not a service error. Local send failures still fail; later correlated receipts
 remain diagnostic only. Never auto-retry a skip or infer causation from later

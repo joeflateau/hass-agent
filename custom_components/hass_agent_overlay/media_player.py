@@ -360,7 +360,7 @@ class HassAgentMediaPlayer(MediaPlayerEntity):
         return (self._optimistic_state or MediaPlayerState(snapshot.state)) if snapshot else None
 
     @property
-    def assumed_state(self) -> bool:
+    def optimistic_playback(self) -> bool:
         return self.current is not None and self._optimistic_state is not None
 
     @property
@@ -407,7 +407,7 @@ class HassAgentMediaPlayer(MediaPlayerEntity):
 
     @property
     def media_position(self) -> float | None:
-        if self.assumed_state and self._optimistic_position is not None:
+        if self.optimistic_playback and self._optimistic_position is not None:
             return self._optimistic_position
         position = number(self.track.get("position"))
         duration = self.media_duration
@@ -415,7 +415,7 @@ class HassAgentMediaPlayer(MediaPlayerEntity):
 
     @property
     def media_position_updated_at(self) -> datetime | None:
-        if self.assumed_state and self._optimistic_position_at is not None:
+        if self.optimistic_playback and self._optimistic_position_at is not None:
             return self._optimistic_position_at
         # Native HA extrapolates at rate 1. Do not claim that timeline for a
         # playing source at another/unknown rate; retain raw data in attributes.
@@ -433,6 +433,8 @@ class HassAgentMediaPlayer(MediaPlayerEntity):
             "observed_at": snapshot.observed_at if snapshot else None,
             "playback_rate": number(self.track.get("rate"), 8),
             "last_media_action": self._last_result,
+            # HA assumed_state means show both Play and Pause, not optimistic UI.
+            "optimistic_playback": self.optimistic_playback,
         }
 
     @callback
