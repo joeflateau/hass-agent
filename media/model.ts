@@ -7,6 +7,7 @@ export interface MediaSnapshot {
   state: "playing" | "paused" | "idle" | "unavailable";
   session: string;
   version: string | null;
+  source_version: string | null;
   observed_at: string;
   title: string | null;
   artist: string | null;
@@ -19,7 +20,7 @@ export interface MediaSnapshot {
 }
 
 export function emptySnapshot(session: string, state: "idle" | "unavailable", now = Date.now()): MediaSnapshot {
-  return { state, session, version: null, observed_at: new Date(now).toISOString(), title: null,
+  return { state, session, version: null, source_version: null, observed_at: new Date(now).toISOString(), title: null,
     artist: null, album: null, source: null, duration: null, position: null, position_at: null, rate: null };
 }
 const finite = (v: unknown, max: number): number | null =>
@@ -41,6 +42,7 @@ export function parseNowPlaying(raw: string, session: string, now = Date.now()):
     // persistent track identity. Keep process/source/session and stable visible
     // metadata fencing; timestamps, progress and opaque native IDs are excluded.
     version: createHash("sha256").update(JSON.stringify([session, ...["processIdentifier", "bundleIdentifier", "title", "artist", "album"].map(k => record[k] ?? null)])).digest("hex"),
+    source_version: createHash("sha256").update(JSON.stringify([session, record.processIdentifier ?? null, record.bundleIdentifier ?? null])).digest("hex"),
     title: text(record.title), artist: text(record.artist), album: text(record.album), source: text(record.bundleIdentifier, 256),
     duration: finite(record.duration, 604800), position: finite(record.elapsedTime, 604800),
     position_at: timestamp, rate: finite(record.playbackRate, 8),

@@ -4,8 +4,10 @@
 
 Metadata and four native transport actions in the **existing hass-agent**
 MQTT connection. Run in the active user's GUI LaunchAgent login. The frame talks
-to HA; neither HA nor the frame needs SSH access, a new HA custom integration,
-or access to another macOS user's login. On by default (`MEDIA_ENABLED=true`),
+to HA; neither HA nor the frame needs SSH access or access to another macOS
+user's login. The optional [Hass Agent Overlay companion](../custom_components/hass_agent_overlay/README.md)
+automatically creates native HA `media_player` entities from these MQTT devices.
+The existing sensor/buttons still work without the companion. On by default (`MEDIA_ENABLED=true`),
 including on existing devices after upgrade; set `MEDIA_ENABLED=false` to disable. Device identity and broker
 ACLs remain the existing agent's responsibility.
 
@@ -56,20 +58,24 @@ or agent offline. Its JSON attributes carry the complete snapshot:
 
 `position_at` is the **original helper timestamp**, not refreshed at publication.
 `observed_at` measures reader freshness, not timeline origin. Unknown fields are
-null; idle/unavailable clear every track/progress field and `version`. Strings
+null; idle/unavailable clear every track/progress field and `version`/`source_version`. The source version separately fences process,
+bundle and agent session for command confirmation. Strings
 are capped at 512 characters (source 256); numeric timeline values are finite,
 nonnegative, at most 7 days; rate at most 8. Consumers must check state and
 observation age ≤15 seconds even when HA still has old attributes. Extrapolate
 only while playing, with a valid source timestamp/rate, and cap by duration;
 never fabricate a progress origin when the timestamp is absent.
 
-Use HA `button.press` on the four discovered buttons for ordinary HA controls.
-HA's command template creates a fresh request ID and uses that button's current
+With the optional companion installed, use its native **Media** entity and
+standard `media_player` services as the primary controls. Without it, use HA
+`button.press` on the four discovered buttons. Their command template creates a fresh request ID and uses that button's current
 snapshot attributes, so entity renames do not break it. HA 2026.8.3 supports MQTT
 button `command_template` with `this`, but **does not support MQTT media_player
 discovery**. Its native Universal player reads title/duration/position only from
 child media players, not sensor attribute overrides; a Universal wrapper would
-lose this metadata. This implementation does not advertise a false player.
+lose this metadata. The native [companion integration](../custom_components/hass_agent_overlay/README.md)
+maps the real MQTT sensor into a `MediaPlayerEntity`, retaining metadata and the
+correlated command protocol; it does not advertise unsupported MQTT discovery.
 
 For a frame needing exact tap/result correlation, call **HA `mqtt.publish`**,
 allowlisted to this single topic, with `qos: 0`, `retain: false`, and a payload:
