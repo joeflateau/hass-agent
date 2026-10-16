@@ -15,26 +15,33 @@ request IDs and never retries an uncertain command. Removing a volatile native
 identifier does not waive any of those checks.
 
 Two consecutive items with identical process/app/title/artist/album cannot be
-distinguished by this metadata. Such a skip must remain `submitted` rather than
-being called `observed` merely because the opaque identifier changed. The source
-does not provide a guaranteed stable content ID; stronger same-metadata identity
-would require an independently verified source capability, not a made-up ID.
+distinguished by this metadata. Do not invent stable identity from a volatile
+native ID. A successful native command is `submitted`, not proof of causation.
 
-## Command completion and polling
+## Command submission and subscription
 
-A background metadata poll is not a competing playback command. One action may
-reserve the command slot and wait for that existing bounded read, then performs
-a fresh preflight. Other actions are rejected rather than queued.
+The HA service returns after local MQTT publication, without waiting for Mac
+receipts or a playback change. Play/pause uses a bounded temporary assumed state;
+normal newer producer telemetry replaces it. Previous/Next never invent the next
+item's metadata. Local publish failures still fail; later receipts are diagnostic.
 
-Native command completion can precede macOS/Chrome state propagation. The agent
-sends exactly once, then observes for up to six seconds (250ms between reads)
-for the expected state on the same track, or changed identity for skip. Changed
-epoch, unavailable state, or changed track ends confirmation. Only an actual
-matching observation produces `observed`; a deadline remains `submitted`, never
-optimistic success. Reconnect/shutdown cancels observation and fences late reads.
-The complete action has a 24-second cancellation deadline, including poll join,
-runtime preparation and preflight. In-flight identical duplicates emit no premature
-receipt; completed requests retain deduplication. `source_version` separately
-fences the session/process/bundle, so a different player cannot confirm a skip.
-The HA companion waits up to 30 seconds for the correlated receipt to cover an
-existing poll, fresh preflight, native command, and bounded confirmation.
+A command reserves one short native-action slot, joins any existing bounded
+metadata probe, and performs a fresh safety preflight. Other concurrent actions
+are rejected, not queued/replayed. Successful native completion immediately emits
+`submitted`; no confirmation reads, six-second wait, optimistic `observed` receipt,
+or action retry. A failed/timed-out native call remains `unknown` because it may
+have happened. The complete preflight/action has a 24-second cancellation ceiling,
+and request IDs remain consumed across uncertainty. Epoch changes cancel native
+work and fence late receipts.
+
+Normal Mac metadata comes from the pinned helper's MediaRemote notification
+stream, with full snapshots rather than deltas. Empty payload is idle. Events
+update immediately and can arrive during an action; source/session/track fencing
+still applies. A pending older successful probe never overwrites a newer event; a failed probe
+still clears availability.
+The stream provides no heartbeat: a bounded real metadata probe after ten quiet
+seconds renews the 15-second lease. An independent active-login check runs every
+ten seconds even under continuous events. A failed native eligibility check kills
+and fences the stream; restart must pass login verification again. Stream silence
+alone is not failure, and process liveness alone never refreshes observation time.
+Source `position_at` remains unchanged by health observations or UI assumptions.

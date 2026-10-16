@@ -61,7 +61,7 @@ or agent offline. Its JSON attributes carry the complete snapshot:
 `position_at` is the **original helper timestamp**, not refreshed at publication.
 `observed_at` measures reader freshness, not timeline origin. Unknown fields are
 null; idle/unavailable clear every track/progress field and `version`/`source_version`. The source version separately fences process,
-bundle and agent session for command confirmation. Strings
+bundle and agent session for command preflight. Strings
 are capped at 512 characters (source 256); numeric timeline values are finite,
 nonnegative, at most 7 days; rate at most 8. Consumers must check state and
 observation age ≤15 seconds even when HA still has old attributes. Extrapolate
@@ -105,16 +105,16 @@ session rejects every prior-session request, so crash recovery never replays it.
 Receipt: `request_id`, `action`, `timestamp`, `status`, optional `reason`:
 
 - `rejected`: no native action was sent.
-- `observed`: helper returned, and a subsequent read matches play/pause or shows
-  a different track for a skip. This is observed state, not proof of causation.
-- `submitted`: helper returned, change not observed yet.
+- `observed`: accepted for compatibility with older agents; not emitted by the current submission-only controller.
+- `submitted`: the native helper returned successfully. Playback is not waited on.
 - `unknown`: native call failed/timed out after it may have happened.
 
-`mqtt.publish`/`button.press` success confirms submission to HA, not playback.
-Observe the **Last Media Action** sensor (or the exact result topic) and match
-`request_id` for a correlated frame action. Results are not retained or replayed;
-a lost result remains unknown. Never auto-retry a skip or infer success from a
-later unrelated state change. Refresh current state before a deliberate new tap.
+The native Overlay services complete immediately after local MQTT publication.
+Play/pause show bounded temporary assumed state; subscribed Mac telemetry replaces
+it. Previous/Next do not fabricate track metadata. A missing playback confirmation
+is not a service error. Local send failures still fail; later correlated receipts
+remain diagnostic only. Never auto-retry a skip or infer causation from later
+state changes. The MQTT buttons also submit without waiting for playback.
 The shared household **Last Command** sensor/protocol is unchanged.
 
 ## Genuine native artwork
@@ -174,15 +174,30 @@ that publishes no embedded art or exceeds these limits has no artwork.
 
 ## Architecture, packaging and limits
 
-`controller.ts` owns single-flight polling and playback. `mqtt.ts` owns discovery,
-availability, reconnect invalidation and transport. `model.ts` bounds untrusted
-helper output/requests. `process.ts` invokes exact executable/arguments without a
-shell, kills at 4 seconds, limits stdout to 64 KiB, ignores stderr, and aborts on
-shutdown. Media polling starts independently of battery/display/League/updates;
-it schedules 5 seconds **after completion**, never accumulates polls or waits
-in the other readers' lifecycle. No per-tick metadata logs. Artwork reads run
-independently, with their own bounded cadence and output ceiling; metadata and
-commands never await image IO.
+`controller.ts` owns single-flight command/preflight and subscription lifecycle.
+`mqtt.ts` owns discovery, availability, reconnect invalidation and transport.
+`model.ts` bounds untrusted helper output/requests. `process.ts` invokes exact
+executables/arguments without a shell. One-shot calls kill at four seconds,
+limit metadata stdout to 64 KiB and abort on shutdown; artwork has its own bound.
+
+Normal updates use one long-lived pinned helper `stream --no-diff --no-artwork`
+subscription to native MediaRemote notifications. Full newline-delimited events
+carry `{type:"data",diff:false,payload:{...}}`; empty payload means healthy idle.
+Stream records are bounded to 64 KiB and ingress to 1 MiB/second, never accumulated
+across the process lifetime. Exit/malformed output clears availability and retries
+the subscription after five seconds; this never replays a playback action.
+Reconnection/shutdown kills the old child and fences late events. A pending older successful
+probe cannot overwrite a newer event; a failed probe still clears availability. Metadata streams remain independent of
+battery/display/League/update readers and artwork IO.
+
+The pinned helper has no heartbeat and suppresses unchanged events. Therefore a
+real bounded metadata read renews the existing 15-second freshness lease after
+ten seconds without an event; mere process existence never freshens metadata.
+An independent ten-second active-GUI-login check runs even during frequent events.
+Failed eligibility/probe aborts and fences the subscription until native login
+checks succeed again. Original helper `timestamp` stays `position_at`; health
+reads never invent a timeline origin. Injected backends without subscription
+support retain the five-second-after-completion polling fallback.
 Result ledger is bounded to 256 entries per minute; excess actions reject.
 Sensor expires after 20 seconds; both sensor and buttons also require existing
 agent availability and fresh, appropriate media state. Idle disables controls.

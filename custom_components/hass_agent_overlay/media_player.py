@@ -21,7 +21,7 @@ from homeassistant.helpers.event import async_call_later, async_track_state_chan
 from homeassistant.util import dt as dt_util
 
 from .artwork import Artwork, MAX_PAYLOAD, decode_artwork
-from .const import FRESHNESS_SECONDS, RESULT_TIMEOUT_SECONDS
+from .const import FRESHNESS_SECONDS, OPTIMISM_SECONDS
 from .discovery import Source, discover
 from .snapshot import Snapshot, number, text, timestamp
 
@@ -104,7 +104,7 @@ async def async_setup_entry(
 
 
 class HassAgentMediaPlayer(MediaPlayerEntity):
-    """Expose only supported controls and never optimistically change playback."""
+    """Expose bounded optimistic transport feedback over authoritative telemetry."""
 
     _attr_has_entity_name = True
     _attr_name = "Media"
@@ -122,7 +122,12 @@ class HassAgentMediaPlayer(MediaPlayerEntity):
         self._unsubscribers: list[Any] = []
         self._expiry_cancel: Any = None
         self._added = False
-        self._pending: asyncio.Future[dict[str, Any]] | None = None
+        self._sending = False
+        self._command_snapshot: Snapshot | None = None
+        self._optimistic_state: MediaPlayerState | None = None
+        self._optimistic_position: float | None = None
+        self._optimistic_position_at: datetime | None = None
+        self._optimism_cancel: Any = None
         self._request: dict[str, str] | None = None
         self._last_result: dict[str, Any] | None = None
         self._last_observed: Snapshot | None = None
@@ -184,7 +189,7 @@ class HassAgentMediaPlayer(MediaPlayerEntity):
         if self._expiry_cancel:
             self._expiry_cancel()
             self._expiry_cancel = None
-        self._abort_pending("The MQTT connection changed. Check playback before trying again.")
+        self._clear_command()
         self.async_write_ha_state()
 
     @callback
@@ -192,7 +197,7 @@ class HassAgentMediaPlayer(MediaPlayerEntity):
         self._added = False
         self._clear_artwork()
         self._unbind_source()
-        self._abort_pending("The media player was unloaded. Check playback before trying again.")
+        self._clear_command()
 
     @callback
     def _unbind_source(self) -> None:
@@ -208,6 +213,7 @@ class HassAgentMediaPlayer(MediaPlayerEntity):
         if source == self.source_info:
             return
         self.source_info = source
+        self._clear_command()
         self._clear_artwork()
         if self._added:
             self._unbind_source()
@@ -264,20 +270,75 @@ class HassAgentMediaPlayer(MediaPlayerEntity):
         if snapshot is not None and snapshot.fresh():
             delay = FRESHNESS_SECONDS - (dt_util.utcnow() - snapshot.observed).total_seconds()
             self._expiry_cancel = async_call_later(self.hass, delay + 0.05, self._expire)
-        if self._request and (snapshot is None or not snapshot.fresh() or snapshot.session != self._request["session"]):
-            self._abort_pending("The Mac playback connection changed. Refresh before trying again.")
+        if self._request:
+            command_snapshot = self._command_snapshot
+            if (snapshot is None or not snapshot.fresh() or snapshot.state == "idle"
+                    or snapshot.session != self._request["session"]
+                    or snapshot.version != self._request["expected"]
+                    or command_snapshot is None
+                    or snapshot.attributes.get("source") != command_snapshot.attributes.get("source")):
+                self._clear_command()
+            elif snapshot.observed > command_snapshot.observed:
+                # Every genuinely newer observation wins, even when it disagrees.
+                self._clear_optimism()
 
     @callback
     def _expire(self, _now: Any) -> None:
         self._expiry_cancel = None
         self._clear_artwork()
-        self._abort_pending("The Mac playback view expired. Check playback before trying again.")
+        self._clear_command()
         self.async_write_ha_state()
 
     @callback
-    def _abort_pending(self, reason: str) -> None:
-        if self._pending is not None and not self._pending.done():
-            self._pending.set_exception(HomeAssistantError(reason))
+    def _clear_optimism(self) -> None:
+        if self._optimism_cancel:
+            self._optimism_cancel()
+            self._optimism_cancel = None
+        self._optimistic_state = None
+        self._optimistic_position = None
+        self._optimistic_position_at = None
+
+    @callback
+    def _clear_command(self) -> None:
+        self._clear_optimism()
+        self._request = None
+        self._command_snapshot = None
+
+    @callback
+    def _expire_optimism(self, _now: Any, request_id: str | None = None) -> None:
+        if request_id is not None and (self._request is None or self._request["request_id"] != request_id):
+            return
+        self._clear_optimism()
+        if self._added:
+            self.async_write_ha_state()
+
+    @callback
+    def _set_optimism(self, action: str) -> None:
+        # Re-anchor only a known normal-rate timeline. Never mutate the source
+        # snapshot or invent next/previous track metadata or a progress origin.
+        now = dt_util.utcnow()
+        position = self.media_position
+        position_at = self.media_position_updated_at
+        if (position is not None and position_at is not None
+                and self.track.get("rate") == 1):
+            if self.state == MediaPlayerState.PLAYING:
+                position += max(0, (now - position_at).total_seconds())
+            duration = self.media_duration
+            if duration is not None:
+                position = min(position, duration)
+            position_at = now
+        else:
+            position = position_at = None
+        self._clear_optimism()
+        if action not in ("play", "pause"):
+            return
+        self._optimistic_state = MediaPlayerState.PLAYING if action == "play" else MediaPlayerState.PAUSED
+        self._optimistic_position = position
+        self._optimistic_position_at = position_at
+        request_id = self._request["request_id"] if self._request else None
+        self._optimism_cancel = async_call_later(
+            self.hass, OPTIMISM_SECONDS, lambda now: self._expire_optimism(now, request_id)
+        )
 
     @property
     def current(self) -> Snapshot | None:
@@ -296,7 +357,11 @@ class HassAgentMediaPlayer(MediaPlayerEntity):
     @property
     def state(self) -> MediaPlayerState | None:
         snapshot = self.current
-        return MediaPlayerState(snapshot.state) if snapshot else None
+        return (self._optimistic_state or MediaPlayerState(snapshot.state)) if snapshot else None
+
+    @property
+    def assumed_state(self) -> bool:
+        return self.current is not None and self._optimistic_state is not None
 
     @property
     def supported_features(self) -> MediaPlayerEntityFeature:
@@ -342,12 +407,16 @@ class HassAgentMediaPlayer(MediaPlayerEntity):
 
     @property
     def media_position(self) -> float | None:
+        if self.assumed_state and self._optimistic_position is not None:
+            return self._optimistic_position
         position = number(self.track.get("position"))
         duration = self.media_duration
         return min(position, duration) if position is not None and duration is not None else position
 
     @property
     def media_position_updated_at(self) -> datetime | None:
+        if self.assumed_state and self._optimistic_position_at is not None:
+            return self._optimistic_position_at
         # Native HA extrapolates at rate 1. Do not claim that timeline for a
         # playing source at another/unknown rate; retain raw data in attributes.
         if self.state == MediaPlayerState.PLAYING and self.track.get("rate") != 1:
@@ -369,7 +438,7 @@ class HassAgentMediaPlayer(MediaPlayerEntity):
     @callback
     def _result_changed(self, event: Event) -> None:
         state = event.data.get("new_state")
-        if state is None or self._request is None or self._pending is None or self._pending.done():
+        if state is None or self._request is None:
             return
         attrs = state.attributes
         if attrs.get("request_id") != self._request["request_id"] or attrs.get("action") != self._request["action"]:
@@ -379,49 +448,48 @@ class HassAgentMediaPlayer(MediaPlayerEntity):
             return
         result = {key: text(attrs.get(key)) for key in ("request_id", "action", "status", "reason", "timestamp")}
         self._last_result = result
-        self._pending.set_result(result)
+        if status in ("rejected", "unknown"):
+            self._clear_optimism()
         self.async_write_ha_state()
 
     async def _command(self, action: str) -> None:
+        if not self._added:
+            raise HomeAssistantError("The media player is unloaded; no playback command was sent.")
         if not mqtt.is_connected(self.hass):
             raise HomeAssistantError("MQTT is disconnected; no playback command was sent.")
         self._refresh()
         snapshot = self.current
         if snapshot is None or snapshot.state == "idle" or not self.source_info.result_entity_id:
             raise HomeAssistantError("No current Mac playback session. Refresh before trying again.")
-        if self._pending is not None:
-            raise HomeAssistantError("Another playback command is still pending. Check playback before trying again.")
+        if self._sending:
+            raise HomeAssistantError("A playback command is being sent; no additional command was queued.")
         request = {
             "action": action, "request_id": uuid4().hex,
             "session": snapshot.session, "expected": snapshot.version,
             "observed_at": snapshot.observed_at,
         }
+        self._sending = True
         self._request = request
-        future = self._pending = self.hass.loop.create_future()
+        self._last_result = None
+        self._command_snapshot = snapshot
+        self._set_optimism(action)
+        self.async_write_ha_state()
         try:
+            # Service completion means local publication, not proof of playback.
+            # Normal subscribed telemetry corrects the temporary assumed state;
+            # correlated receipts are diagnostic and never gate another tap.
             await mqtt.async_publish(
                 self.hass, f"hass-agent/{self.source_info.agent_id}/media/command",
                 json.dumps(request), qos=0, retain=False,
             )
-            result = await asyncio.wait_for(asyncio.shield(future), RESULT_TIMEOUT_SECONDS)
-            if result["status"] == "rejected":
-                raise HomeAssistantError(result.get("reason") or "The Mac declined the playback command.")
-            if result["status"] == "unknown":
-                raise HomeAssistantError("The Mac may have received the command, but could not confirm it. Check playback before trying again.")
-            if result["status"] == "submitted":
-                raise HomeAssistantError("Command sent, but the playback change was not confirmed. Check playback before trying again.")
-        except TimeoutError as error:
-            self._last_result = {"request_id": request["request_id"], "action": action, "status": "unknown", "reason": "No receipt received", "timestamp": dt_util.utcnow().isoformat()}
-            self.async_write_ha_state()
-            raise HomeAssistantError("No reply from the Mac. The command may have happened; check playback before trying again.") from error
+        except (Exception, asyncio.CancelledError):
+            if self._request is request:
+                self._clear_command()
+                if self._added:
+                    self.async_write_ha_state()
+            raise
         finally:
-            if not future.done():
-                future.cancel()
-            # Retrieve a disconnect/unload exception even if publication failed.
-            if future.done() and not future.cancelled():
-                future.exception()
-            self._pending = None
-            self._request = None
+            self._sending = False
 
     async def async_media_play(self) -> None:
         await self._command("play")
