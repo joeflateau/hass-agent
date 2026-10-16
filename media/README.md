@@ -106,7 +106,11 @@ Receipt: `request_id`, `action`, `timestamp`, `status`, optional `reason`:
 
 - `rejected`: no native action was sent.
 - `observed`: helper returned, and a subsequent read matches play/pause or shows
-  a different track for a skip. This is observed state, not proof of causation.
+  a different track for a skip. Previous can also confirm a fresh same-track
+  restart: a substantial position reset toward the beginning, with advancing
+  source timestamps after command dispatch and no natural end/loop ambiguity.
+  Missing timeline evidence or a near-start/no-op remains unconfirmed. This is
+  observed state, not proof of causation.
 - `submitted`: helper returned, change not observed yet.
 - `unknown`: native call failed/timed out after it may have happened.
 

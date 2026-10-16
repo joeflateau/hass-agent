@@ -35,6 +35,29 @@ function abortable<T>(operation: Promise<T> | undefined, signal: AbortSignal): P
   });
 }
 
+/** Previous may restart rather than change tracks. Observe a new timeline origin,
+ * not helper success, timestamp churn, or ordinary progress across a loop boundary. */
+function observedRestart(before: MediaSnapshot, after: MediaSnapshot, sentAt: number): boolean {
+  if (!before.version || after.version !== before.version || after.session !== before.session ||
+    after.source_version !== before.source_version || !before.source_version ||
+    !["playing", "paused"].includes(before.state) || !["playing", "paused"].includes(after.state) ||
+    before.position === null || after.position === null || !before.position_at || !after.position_at ||
+    before.duration === null || after.duration === null || Math.abs(after.duration - before.duration) > 1 ||
+    (before.state === "playing" ? before.rate !== 1 : before.rate !== 0 && before.rate !== 1) ||
+    (after.state === "playing" ? after.rate !== 1 : after.rate !== 0 && after.rate !== 1)) return false;
+  const beforeAt = Date.parse(before.position_at);
+  const afterAt = Date.parse(after.position_at);
+  if (beforeAt > sentAt || afterAt <= beforeAt || afterAt < sentAt ||
+    afterAt > Date.parse(after.observed_at)) return false;
+  const rate = before.state === "playing" ? 1 : 0;
+  const atSend = before.position + (sentAt - beforeAt) / 1000 * rate;
+  const uninterrupted = before.position + (afterAt - beforeAt) / 1000 * rate;
+  return atSend >= 5 && uninterrupted < before.duration - 2 &&
+    before.position - after.position >= 5 &&
+    after.position <= (afterAt - sentAt) / 1000 + 2 &&
+    uninterrupted - after.position >= 5;
+}
+
 /** One media operation at a time. No queued playback, no retries, no impact on other readers. */
 export class MediaController {
   snapshot: MediaSnapshot;
@@ -140,6 +163,7 @@ export class MediaController {
         return receipt.result = result("rejected", "Now Playing changed or is unavailable; refresh before trying again");
       }
       receipt.result = result("unknown", "Outcome unknown; check playback before another action");
+      const sentAt = this.clock();
       await abortable(this.backend.command(request.action, signal), signal);
       // Native command completion precedes macOS/Chrome metadata propagation.
       // Observe for a bounded window; never send the playback action again.
@@ -154,7 +178,8 @@ export class MediaController {
           this.update(after);
           if (after.source_version !== before.source_version) break;
           observed = after.version !== null && (
-            request.action === "next" || request.action === "previous" ? after.version !== before.version :
+            request.action === "next" || request.action === "previous" ? after.version !== before.version ||
+              request.action === "previous" && observedRestart(before, after, sentAt) :
               after.version === before.version && after.state === (request.action === "play" ? "playing" : "paused"));
           if (observed || after.version !== before.version || after.state === "unavailable") break;
           await delay(250, undefined, { signal: observing });

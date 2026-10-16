@@ -208,6 +208,67 @@ describe("media action lifecycle", () => {
     vi.useRealTimers();
     expect(backend.command).toHaveBeenCalledOnce();
   });
+  it("confirms Previous restarting the same track from a fresh position reset", async () => {
+    vi.useFakeTimers();
+    try {
+      const { backend, controller, request, time } = setup();
+      await controller.poll();
+      vi.mocked(backend.command).mockImplementation(async () => {
+        time(now + 1000);
+        vi.mocked(backend.read).mockResolvedValue(JSON.stringify({ ...chrome,
+          elapsedTime: 0.4, timestamp: new Date(now + 500).toISOString() }));
+      });
+      const body = request("previous");
+      const pending = controller.dispatch(body);
+      await vi.advanceTimersByTimeAsync(6100);
+      const result = await pending;
+      expect(result?.status).toBe("observed");
+      expect(await controller.dispatch(body)).toEqual(result);
+      expect(controller.snapshot.position).toBe(0.4);
+      expect(backend.command).toHaveBeenCalledExactlyOnceWith("previous", expect.any(AbortSignal));
+    } finally { vi.useRealTimers(); }
+  });
+  it.each<{ name: string; before?: Record<string, unknown>; after?: Record<string, unknown>; action?: string; status?: string }>([
+    { name: "Previous changing tracks", after: { title: "previous track" }, status: "observed" },
+    { name: "paused restart", before: { playing: false, playbackRate: 0 }, after: { playing: false, playbackRate: 0 }, status: "observed" },
+    { name: "older valid position anchor", before: { elapsedTime: 30, timestamp: new Date(now - 60000).toISOString() }, status: "observed" },
+    { name: "rewind inferred only from an old zero anchor", before: { elapsedTime: 0, timestamp: new Date(now - 60000).toISOString() } },
+    { name: "ordinary forward progress", after: { elapsedTime: chrome.elapsedTime + 1.5 } },
+    { name: "unchanged source timestamp", after: { timestamp: chrome.timestamp } },
+    { name: "older source timestamp", after: { timestamp: new Date(now - 2000).toISOString() } },
+    { name: "source timestamp preceding command", after: { timestamp: new Date(now - 500).toISOString() } },
+    { name: "future source timestamp", after: { timestamp: new Date(now + 1500).toISOString() } },
+    { name: "missing source timestamp", after: { timestamp: null } },
+    { name: "missing baseline timestamp", before: { timestamp: null } },
+    { name: "future baseline timestamp", before: { timestamp: new Date(now + 500).toISOString() } },
+    { name: "missing position", after: { elapsedTime: null } },
+    { name: "near-start no-op or jitter", before: { elapsedTime: 0.8 } },
+    { name: "small backward correction", before: { elapsedTime: 2 }, after: { elapsedTime: 1 } },
+    { name: "seek away from start", after: { elapsedTime: 50 } },
+    { name: "possible natural loop", before: { elapsedTime: chrome.duration - 1 } },
+    { name: "unknown duration", before: { duration: null }, after: { duration: null } },
+    { name: "changed duration", after: { duration: 100 } },
+    { name: "unknown baseline rate", before: { playbackRate: null } },
+    { name: "unsupported playback rate", after: { playbackRate: 2 } },
+    { name: "source process switch", after: { processIdentifier: 456 } },
+    { name: "Next with same-track restart", action: "next" },
+  ])("handles restart evidence conservatively: $name", async ({ before, after, action = "previous", status = "submitted" }) => {
+    vi.useFakeTimers();
+    try {
+      const { backend, controller, request, time } = setup();
+      vi.mocked(backend.read).mockResolvedValue(JSON.stringify({ ...chrome, ...before }));
+      await controller.poll();
+      vi.mocked(backend.command).mockImplementation(async () => {
+        time(now + 1000);
+        vi.mocked(backend.read).mockResolvedValue(JSON.stringify({ ...chrome,
+          elapsedTime: 0.4, timestamp: new Date(now + 500).toISOString(), ...after }));
+      });
+      const pending = controller.dispatch(request(action));
+      await vi.advanceTimersByTimeAsync(6100);
+      expect((await pending)?.status).toBe(status);
+      expect(backend.command).toHaveBeenCalledExactlyOnceWith(action, expect.any(AbortSignal));
+    } finally { vi.useRealTimers(); }
+  });
   it("does not call a same-metadata skip observed just because the native content ID changed", async () => {
     const { backend, controller, request } = setup();
     let content = 0;

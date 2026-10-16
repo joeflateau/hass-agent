@@ -15,7 +15,7 @@ request IDs and never retries an uncertain command. Removing a volatile native
 identifier does not waive any of those checks.
 
 Two consecutive items with identical process/app/title/artist/album cannot be
-distinguished by this metadata. Such a skip must remain `submitted` rather than
+distinguished by this metadata. Such a Next skip must remain `submitted` rather than
 being called `observed` merely because the opaque identifier changed. The source
 does not provide a guaranteed stable content ID; stronger same-metadata identity
 would require an independently verified source capability, not a made-up ID.
@@ -28,7 +28,16 @@ a fresh preflight. Other actions are rejected rather than queued.
 
 Native command completion can precede macOS/Chrome state propagation. The agent
 sends exactly once, then observes for up to six seconds (250ms between reads)
-for the expected state on the same track, or changed identity for skip. Changed
+for the expected state on the same track, or changed identity for skip. Previous
+also accepts a same-track restart with a raw rewind of at least five seconds
+and a position near the beginning (elapsed time since dispatch plus two seconds).
+Original source timestamps must advance, the new anchor must be at/after dispatch
+and no later than its observation, and session/source must match. Known duration
+and normal playback rate must exclude ordinary progress reaching the end/loop
+boundary; missing fields, near-start no-ops, jitter, and ambiguous wraps remain
+`submitted`. Paused restart uses its raw position without extrapolation. These
+observations do not distinguish a restart from an identical-metadata previous
+item or prove causation, and they never change track identity. Changed
 epoch, unavailable state, or changed track ends confirmation. Only an actual
 matching observation produces `observed`; a deadline remains `submitted`, never
 optimistic success. Reconnect/shutdown cancels observation and fences late reads.
