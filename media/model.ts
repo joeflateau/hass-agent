@@ -36,7 +36,11 @@ export function parseNowPlaying(raw: string, session: string, now = Date.now()):
     ? record.timestamp : null;
   return {
     ...emptySnapshot(session, "idle", now), state: record.playing ? "playing" : "paused",
-    version: createHash("sha256").update(JSON.stringify([session, ...["processIdentifier", "bundleIdentifier", "contentItemIdentifier", "title", "artist", "album"].map(k => record[k] ?? null)])).digest("hex"),
+    // macOS can mint contentItemIdentifier anew for each helper connection,
+    // even when the browser process and track are unchanged. It is not a
+    // persistent track identity. Keep process/source/session and stable visible
+    // metadata fencing; timestamps, progress and opaque native IDs are excluded.
+    version: createHash("sha256").update(JSON.stringify([session, ...["processIdentifier", "bundleIdentifier", "title", "artist", "album"].map(k => record[k] ?? null)])).digest("hex"),
     title: text(record.title), artist: text(record.artist), album: text(record.album), source: text(record.bundleIdentifier, 256),
     duration: finite(record.duration, 604800), position: finite(record.elapsedTime, 604800),
     position_at: timestamp, rate: finite(record.playbackRate, 8),

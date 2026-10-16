@@ -32,6 +32,20 @@ describe("Now Playing trust boundary", () => {
     await controller.poll();
     expect(controller.snapshot).toEqual(emptySnapshot(controller.snapshot.session, "unavailable", now));
   });
+  it("keeps a track stable across the observed Chrome per-read content identifier churn", () => {
+    const raw = { ...chrome, processIdentifier: 37817,
+      bundleIdentifier: "com.google.Chrome.app.iknndogofehenbnenooclhillkiloioe",
+      title: "OMENS (Feat. The Pretty WiLD)", artist: "PXNDO REMIX ft. Eminem, Tech N9ne, The Pretty Wild", album: "" };
+    const versions = ["93F5FB2B-2F56-4489-ACA2-8623209BF41E", "43CF6505-917B-4237-8615-A2A53EA45A48", "2A30B4F0-90D1-4E52-9D4B-2FE53224F6A8"]
+      .map(contentItemIdentifier => parseNowPlaying(JSON.stringify({ ...raw, contentItemIdentifier }), "session", now).version);
+    expect(new Set(versions).size).toBe(1);
+    const base = parseNowPlaying(JSON.stringify(raw), "session", now).version;
+    for (const update of [{ title: "Other" }, { artist: "Other" }, { album: "Other" },
+      { processIdentifier: 37818 }, { bundleIdentifier: "com.spotify.client" }]) {
+      expect(parseNowPlaying(JSON.stringify({ ...raw, ...update }), "session", now).version).not.toBe(base);
+    }
+    expect(parseNowPlaying(JSON.stringify(raw), "new-session", now).version).not.toBe(base);
+  });
   it("rejects malformed/invalid media and bounds optional fields without inventing values", () => {
     for (const raw of ["{}", "[]", '"playing"', '{"title":"x","playing":1}']) expect(() => parseNowPlaying(raw, "s")).toThrow();
     expect(parseNowPlaying(JSON.stringify({ ...chrome, duration: -1, elapsedTime: "3", playbackRate: 100,
@@ -39,6 +53,19 @@ describe("Now Playing trust boundary", () => {
   });
 });
 describe("media action lifecycle", () => {
+  it("allows pause through volatile native IDs and confirms the unchanged track paused", async () => {
+    const { backend, controller, request } = setup();
+    const ids = ["93F5FB2B-2F56-4489-ACA2-8623209BF41E", "43CF6505-917B-4237-8615-A2A53EA45A48", "2A30B4F0-90D1-4E52-9D4B-2FE53224F6A8"];
+    vi.mocked(backend.read)
+      .mockResolvedValueOnce(JSON.stringify({ ...chrome, contentItemIdentifier: ids[0] }))
+      .mockResolvedValueOnce(JSON.stringify({ ...chrome, contentItemIdentifier: ids[1] }))
+      .mockResolvedValueOnce(JSON.stringify({ ...chrome, contentItemIdentifier: ids[2], playing: false }));
+    await controller.poll();
+    const result = await controller.dispatch(request("pause"));
+    expect(result?.status).toBe("observed");
+    expect(backend.command).toHaveBeenCalledExactlyOnceWith("pause", expect.any(AbortSignal));
+    expect(controller.snapshot.state).toBe("paused");
+  });
   it("watchdog clears stale metadata even when a poll never completes", async () => {
     vi.useFakeTimers();
     const { backend, controller, time } = setup();
@@ -72,6 +99,14 @@ describe("media action lifecycle", () => {
     await controller.poll();
     expect((await controller.dispatch(request()))?.status).toBe("submitted");
     expect(backend.command).toHaveBeenCalledOnce();
+  });
+  it("does not call a same-metadata skip observed just because the native content ID changed", async () => {
+    const { backend, controller, request } = setup();
+    let content = 0;
+    vi.mocked(backend.read).mockImplementation(async () => JSON.stringify({ ...chrome, contentItemIdentifier: `ephemeral-${++content}` }));
+    await controller.poll();
+    expect((await controller.dispatch(request("next")))?.status).toBe("submitted");
+    expect(backend.command).toHaveBeenCalledExactlyOnceWith("next", expect.any(AbortSignal));
   });
   it("keeps unknown outcomes consumed and never retries a timed-out skip", async () => {
     const { backend, controller, request } = setup();
