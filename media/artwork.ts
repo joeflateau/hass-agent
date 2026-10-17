@@ -29,7 +29,7 @@ export function parseArtwork(raw: string, snapshot: MediaSnapshot): Omit<MediaAr
 
 /** Independent single-flight artwork IO. Metadata and transport never await it. */
 export class ArtworkPublisher {
-  private identity: string | null = null;
+  private identity: string | null | undefined;
   private key: string | null = null;
   private abort?: AbortController;
   private active = false;
