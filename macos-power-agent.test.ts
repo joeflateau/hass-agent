@@ -19,6 +19,8 @@ const mockLogger: winston.Logger = {
 
 const {
   mockBatteryReader,
+  mockBatteryEmitter,
+  mockMqttBatteryIntegration,
   mockBatteryStatusReader,
   mockDeviceEmitter,
   mockDisplayReader,
@@ -28,6 +30,8 @@ const {
   mockMqttDeviceFrameworkClass,
   mockMqttFramework,
 } = vi.hoisted(() => {
+  const mockBatteryEmitter = { publishState: vi.fn(), start: vi.fn(), stop: vi.fn() };
+  const mockMqttBatteryIntegration = vi.fn(function () { return mockBatteryEmitter; });
   const mockDeviceEmitter = {
     publishState: vi.fn(),
   };
@@ -50,7 +54,7 @@ const {
   const mockMqttFramework = {
     connect: vi.fn(),
     disconnect: vi.fn(),
-    createDeviceEmitter: vi.fn(() => mockDeviceEmitter),
+    createDeviceEmitter: vi.fn((_name: string, _entities: unknown[]) => mockDeviceEmitter),
     registerCommands: vi.fn(),
     registerIntegration: vi.fn(),
     registerSwitches: vi.fn(),
@@ -59,6 +63,8 @@ const {
   };
 
   return {
+    mockBatteryEmitter,
+    mockMqttBatteryIntegration,
     mockBatteryReader,
     mockBatteryStatusReader: vi.fn(function () {
       return mockBatteryReader;
@@ -94,6 +100,8 @@ vi.mock("./lol-status-reader.ts", () => ({
 vi.mock("./mqtt-emitter.ts", () => ({
   MqttDeviceFramework: mockMqttDeviceFrameworkClass,
 }));
+
+vi.mock("./battery-mqtt.ts", () => ({ MqttBatteryIntegration: mockMqttBatteryIntegration }));
 
 // Import after mocking
 import { envSchema, MacOSPowerAgent } from "./index.ts";
@@ -132,6 +140,10 @@ describe("MacOSPowerAgent", () => {
     // Clear all mocks after each test to prevent interference
     mockDisplayStatusReader.mockClear();
     mockBatteryStatusReader.mockClear();
+    mockMqttBatteryIntegration.mockClear();
+    mockBatteryEmitter.publishState.mockClear();
+    mockBatteryEmitter.start.mockClear();
+    mockBatteryEmitter.stop.mockClear();
     mockLoLStatusReaderClass.mockClear();
     mockMqttDeviceFrameworkClass.mockClear();
     mockDisplayReader.getDisplayStatus.mockClear();
@@ -224,6 +236,7 @@ describe("MacOSPowerAgent", () => {
 
       expect(mockMqttFramework.connect).toHaveBeenCalled();
       expect(mockBatteryReader.startPmsetRawlogMonitoring).toHaveBeenCalled();
+      expect(mockBatteryEmitter.start).toHaveBeenCalled();
       expect(mockLoLStatusReader.startMonitoring).toHaveBeenCalled();
     });
   });
@@ -285,7 +298,7 @@ describe("MacOSPowerAgent", () => {
       // Trigger the callback
       callback!(batteryInfo);
 
-      expect(mockDeviceEmitter.publishState).toHaveBeenCalledWith(batteryInfo);
+      expect(mockBatteryEmitter.publishState).toHaveBeenCalledWith(batteryInfo);
     });
   });
 
@@ -296,6 +309,7 @@ describe("MacOSPowerAgent", () => {
       await agent.shutdown();
 
       expect(mockBatteryReader.stopPmsetRawlogMonitoring).toHaveBeenCalled();
+      expect(mockBatteryEmitter.stop).toHaveBeenCalled();
       expect(mockLoLStatusReader.stopMonitoring).toHaveBeenCalled();
       expect(mockMqttFramework.disconnect).toHaveBeenCalled();
       expect(mockLogger.info).toHaveBeenCalledWith("Shutting down...");
@@ -457,30 +471,11 @@ describe("MacOSPowerAgent", () => {
   describe("MQTT device framework integration", () => {
     it("should create device emitters for all device types", () => {
       // Verify that createDeviceEmitter was called for each device type
-      expect(mockMqttFramework.createDeviceEmitter).toHaveBeenCalledTimes(5);
+      expect(mockMqttFramework.createDeviceEmitter).toHaveBeenCalledTimes(4);
 
-      // Verify battery emitter creation
-      expect(mockMqttFramework.createDeviceEmitter).toHaveBeenCalledWith(
-        "battery_status",
-        expect.arrayContaining([
-          expect.objectContaining({
-            type: "sensor",
-            id: "battery_level",
-            config: expect.objectContaining({
-              name: "Battery Level",
-              device_class: "battery",
-            }),
-          }),
-          expect.objectContaining({
-            type: "binary_sensor",
-            id: "battery_charging",
-            config: expect.objectContaining({
-              name: "Battery Charging",
-              device_class: "battery_charging",
-            }),
-          }),
-        ])
-      );
+      // Battery discovery is capability-owned, not unconditional generic discovery.
+      expect(mockMqttBatteryIntegration).toHaveBeenCalledWith(mockLogger);
+      expect(mockMqttFramework.registerIntegration).toHaveBeenCalledWith(mockBatteryEmitter);
 
       // Verify uptime emitter creation
       expect(mockMqttFramework.createDeviceEmitter).toHaveBeenCalledWith(
@@ -566,7 +561,7 @@ describe("MacOSPowerAgent", () => {
       // Trigger the callback
       callback!(batteryInfo);
 
-      expect(mockDeviceEmitter.publishState).toHaveBeenCalledWith({
+      expect(mockBatteryEmitter.publishState).toHaveBeenCalledWith({
         batteryLevel: 85,
         isCharging: true,
         powerSource: "AC",
@@ -595,7 +590,7 @@ describe("MacOSPowerAgent", () => {
       // Trigger the callback
       callback!(batteryInfo);
 
-      expect(mockDeviceEmitter.publishState).toHaveBeenCalledWith({
+      expect(mockBatteryEmitter.publishState).toHaveBeenCalledWith({
         batteryLevel: 50,
         isCharging: false,
         powerSource: "Battery",
@@ -777,7 +772,7 @@ describe("MacOSPowerAgent", () => {
       };
 
       // Mock publishState to throw an error
-      mockDeviceEmitter.publishState.mockImplementation(() => {
+      mockBatteryEmitter.publishState.mockImplementationOnce(() => {
         throw new Error("Publish failed");
       });
 
@@ -790,35 +785,11 @@ describe("MacOSPowerAgent", () => {
       expect(() => callback!(batteryInfo)).toThrow("Publish failed");
 
       // Verify that publishState was called despite the error
-      expect(mockDeviceEmitter.publishState).toHaveBeenCalledWith(batteryInfo);
+      expect(mockBatteryEmitter.publishState).toHaveBeenCalledWith(batteryInfo);
     });
 
-    it("should validate entity configurations have required properties", () => {
-      // Check that battery entities have proper structure
-      const batteryCall = mockMqttFramework.createDeviceEmitter.mock.calls.find(
-        (call: any[]) => call[0] === "battery_status"
-      ) as any[] | undefined;
-      expect(batteryCall).toBeDefined();
-
-      if (batteryCall && batteryCall.length > 1) {
-        const batteryEntities = batteryCall[1] as any[];
-        expect(batteryEntities).toEqual(
-          expect.arrayContaining([
-            expect.objectContaining({
-              type: expect.any(String),
-              id: expect.any(String),
-              config: expect.objectContaining({
-                name: expect.any(String),
-              }),
-            }),
-          ])
-        );
-
-        // Check that all battery entities have proper types
-        const entityTypes = batteryEntities.map((e: any) => e.type);
-        expect(entityTypes).toContain("sensor");
-        expect(entityTypes).toContain("binary_sensor");
-      }
+    it("does not create unconditional battery entities", () => {
+      expect(mockMqttFramework.createDeviceEmitter.mock.calls.some(call => call[0] === "battery_status")).toBe(false);
     });
   });
 });

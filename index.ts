@@ -25,7 +25,7 @@ import {
   MIN_UPGRADE_CHECK_INTERVAL,
   UPGRADE_CHECK_INTERVAL_STEP,
 } from "./auto-upgrade-settings.ts";
-import { type BatteryInfo } from "./battery-parser.ts";
+import { MqttBatteryIntegration } from "./battery-mqtt.ts";
 import {
   BatteryStatusReader,
   type UptimeInfo,
@@ -168,7 +168,7 @@ class MacOSPowerAgent {
   private batteryReader: BatteryStatusReader;
   private lolStatusReader: LoLStatusReader;
   private mqttFramework: MqttDeviceFramework;
-  private batteryEmitter: MqttDeviceEmitter<BatteryInfo>;
+  private batteryEmitter: MqttBatteryIntegration;
   private uptimeEmitter: MqttDeviceEmitter<UptimeInfo>;
   private displayEmitter: MqttDeviceEmitter<DisplayInfo>;
   private lolEmitter: MqttDeviceEmitter<LoLGameStatus>;
@@ -192,7 +192,6 @@ class MacOSPowerAgent {
     this.displayReader = new DisplayStatusReader(logger);
     this.batteryReader = new BatteryStatusReader(logger);
     this.lolStatusReader = new LoLStatusReader(logger);
-    this.batteryReader = new BatteryStatusReader(logger);
 
     const mqttConfig: MqttConfig = {
       broker: this.config.MQTT_BROKER,
@@ -209,66 +208,11 @@ class MacOSPowerAgent {
     this.mqttFramework.registerCommands(createMacOSCommands());
     this.mqttFramework.retireCommands(RETIRED_MACOS_COMMAND_IDS);
 
-    // Create device emitters
-    this.batteryEmitter = this.mqttFramework.createDeviceEmitter<BatteryInfo>(
-      "battery_status",
-      [
-        {
-          type: "sensor",
-          id: "battery_level",
-          config: {
-            name: "Battery Level",
-            device_class: "battery",
-            unit_of_measurement: "%",
-            value_template: "{{ value_json.batteryLevel }}",
-          },
-        },
-        {
-          type: "binary_sensor",
-          id: "battery_charging",
-          config: {
-            name: "Battery Charging",
-            device_class: "battery_charging",
-            value_template: "{{ 'ON' if value_json.isCharging else 'OFF' }}",
-          },
-        },
-        {
-          type: "binary_sensor",
-          id: "ac_power",
-          config: {
-            name: "AC Power",
-            device_class: "plug",
-            value_template:
-              "{{ 'ON' if value_json.powerSource == 'AC' else 'OFF' }}",
-          },
-        },
-        {
-          type: "sensor",
-          id: "time_remaining_to_empty",
-          config: {
-            name: "Battery Time Remaining to Empty",
-            unit_of_measurement: "min",
-            value_template: "{{ value_json.timeRemainingToEmpty }}",
-            icon: "mdi:battery-clock",
-            entity_category: "diagnostic",
-            enabled_by_default: true,
-          },
-        },
-        {
-          type: "sensor",
-          id: "time_remaining_to_full",
-          config: {
-            name: "Battery Time Remaining to Full",
-            unit_of_measurement: "min",
-            value_template: "{{ value_json.timeRemainingToFull }}",
-            icon: "mdi:battery-charging",
-            entity_category: "diagnostic",
-            enabled_by_default: true,
-          },
-        },
-      ]
-    );
+    // Capability-owned battery discovery also retires legacy desktop entries.
+    this.batteryEmitter = new MqttBatteryIntegration(logger);
+    this.mqttFramework.registerIntegration(this.batteryEmitter);
 
+    // Create device emitters
     this.uptimeEmitter = this.mqttFramework.createDeviceEmitter<UptimeInfo>(
       "uptime",
       [
@@ -556,6 +500,7 @@ class MacOSPowerAgent {
   }
 
   private startMonitoring(): void {
+    this.batteryEmitter.start();
     // Start pmset rawlog monitoring for real-time battery updates
     this.batteryReader.startPmsetRawlogMonitoring();
 
@@ -598,6 +543,7 @@ class MacOSPowerAgent {
     }
 
     // Stop pmset rawlog process first
+    this.batteryEmitter.stop();
     this.batteryReader.stopPmsetRawlogMonitoring();
 
     // Stop LoL status monitoring

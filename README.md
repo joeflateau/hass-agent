@@ -403,7 +403,14 @@ The agent uses these macOS system commands and APIs:
 
 ### No Battery Detected
 
-Desktop Macs without batteries will only show power source information. This is normal behavior.
+Battery discovery follows a bounded hardware-capability read (`pmset -g batt`),
+not a zero-percent rawlog placeholder. Desktop Macs with a confirmed absent
+internal battery expose only AC power. Their old retained Battery Level,
+Charging and both remaining-time discovery records are retired automatically,
+including after MQTT reconnect or Home Assistant restart. Device identity and
+MacBook battery entity IDs stay unchanged; a genuine battery at 0% is still a
+battery. Failed or unrecognized capability reads preserve existing discovery
+and retry after 30 seconds rather than guessing that hardware disappeared.
 
 ### MQTT Connection Issues
 
